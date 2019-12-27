@@ -62,7 +62,6 @@ git reset --hard XXXXXX               // 版本回溯 写commit号前6位
 ```
 
 注：
-
 * 可以在目录下新建个 `.gitignore` 文件，把不需要 `git` 管理的文件/文件夹路径写进去。常见的有`.idea` `.vscode` 等。
 * 在使用 `git reset` 回溯版本之前，一定要确保当前代码已经 `commit` 过了，因为这个操作会使当前没有 `commit` 的变动消失。
 
@@ -85,7 +84,6 @@ git branch -d branchName                // 删除分支
 ```
 
 注：
-
 * 合并分支时会检查代码是否有冲突，有冲突的话需要解决冲突，搜索 `====` 选择要保留的代码，再次合并。
 
 5. 其他操作
@@ -133,7 +131,6 @@ git remote set-url https：//xx                 // 重置，如果之前弄错�
 ```
 
 注：
-
 - origin为远程仓库的名字，可以更改但不推荐。
 - [clone下载速度很慢怎么办？](https://jscode.me/t/topic/789/2)
 - Github国内的替代品有：
@@ -156,6 +153,6 @@ alias glog="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset
 source ~/.bashrc                                     // 让它生效
 ```
 
-* 注：
-  * `git rebase` 可以美化提交历史，现阶段用不到，略。
+注：
+* `git rebase` 可以美化提交历史，现阶段用不到，略。
 
