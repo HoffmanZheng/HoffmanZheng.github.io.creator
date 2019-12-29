@@ -1,5 +1,8 @@
 ---
-title: "笔记：Git与Github使用手法"
+title: "Git 与 Github 使用指北"
+author: "Chenghao Zheng"
+tags: ["Tools"]
+categories: ["Study notes"]
 date: 2019-12-26T21:49:47+01:00
 draft: false
 ---
@@ -40,7 +43,7 @@ draft: false
 
 * Git 工作流程：
 
-  ![git工作流程](../../static/images/work_process_git.png)
+  ![git工作流程](/images/work_process_git.png)
 
 0. 安装 Git
 

@@ -60,7 +60,7 @@ preserveTaxonomyNames = true
 [params.social]
     GitHub = "NervousOrange"
     Email   = "zch693922442@outlook.com"
-    Wechat = "/images/me/wechatlink.jpg"  # Wechat QRcode image
+#    Wechat = "/images/me/wechatlink.jpg"  # Wechat QRcode image
 #    Telegram = "xxoo"
 #    Dribbble = "xxoo"
 #    Medium = "xxoo"
