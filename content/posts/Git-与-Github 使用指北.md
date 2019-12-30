@@ -7,13 +7,11 @@ date: 2019-12-26T21:49:47+01:00
 draft: false
 ---
 
-[TOC]
-
-# Abstract
-
 本篇介绍实用的工具 Git 及 Github 的常用功能及其操作，如：代码的版本控制，远程备份，团队项目协作等。
 
-# 一、Git 本地仓库（版本管理）
+
+
+## 一、Git 本地仓库（版本管理）
 
 * 应用场景一：
 
@@ -111,7 +109,9 @@ git add fileName --> git stash        // 暂时不像提交代码（通灵术）
 git stash pop
 ```
 
-# 二、Github 远程仓库（云端备份）
+
+
+## 二、Github 远程仓库（云端备份）
 
 * 应用场景
 
@@ -159,7 +159,9 @@ git remote set-url https：//xx                 // 重置，如果之前弄错�
     - [码云Gitee](https://gitee.com/)
     - [Gitlab](https://about.gitlab.com/)
 
-# 三、Github 团队协作
+
+
+## 三、Github 团队协作
 
 1. 在拥有对方仓库 `读 / 写` 权限的情况下
 
@@ -169,7 +171,9 @@ git remote set-url https：//xx                 // 重置，如果之前弄错�
 
 * 将对方仓库 `fork` 到自己仓库，再 `clone` 到本地进行修改，`commit、push` 之后到对方仓库提交 `pull request` ，备注修改内容及意见。
 
-#  四、实用 Git 技巧
+
+
+##  四、实用 Git 技巧
 
 * 快捷键设置
 
