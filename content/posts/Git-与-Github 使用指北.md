@@ -11,43 +11,21 @@ draft: false
 
 
 
-### 一、Git 本地仓库（版本管理）
+# 一、Git 本地仓库
 
-* 应用场景一：
+Git 工作流程：
 
-```shell
-甲方：我这个背景颜色要五彩斑斓的黑
-甲方：我还是想要土耳其沙滩上空蓝天的那种蓝色，你再改下
-甲方：我还是觉得原先设计的那种颜色比较好看，改回去把
-我：好的（MMP，不早说，我现在已经没法撤销了！）
-```
+![git工作流程](/images/work_process_git.png)
 
-* 应用场景二：
+### 0. 应用场景
 
-```shell
-老板：给我做一个页面
-我：花了几天，做出来了，请过目
-老板：不够醒目，再改改
-老板娘：我觉得挺好，要是背景能做成五彩斑斓的黑就好了
-我：好嘞，我做两份你们对比一下（MMP，你们俩就不能统一意见吗！）
-```
+* 代码版本管理 / 多版本代码开发 / 多版本代码合并
 
-* 应用场景三：
-
-```shell
-老板：昨天夜里我和老板娘达成一致了，两个版本都要，我的放在上面，老板娘的在下面
-我：好的，我合并一下 (￣▽￣)"
-```
-
-* Git 工作流程：
-
-  ![git工作流程](/images/work_process_git.png)
-
-#### 0. 安装 Git
+### 1. 安装 Git
 
 [参考伯克利课程 CS61b 中的教程安装 Git](https://sp18.datastructur.es/materials/lab/lab1setup/windows.html)
 
-#### 1. 配置 Git
+### 2. 配置 Git
 
 ```shell
 git config --global user.name + 你的英文名
@@ -60,7 +38,7 @@ git config --global --list                 // 查看当前配置列表
 vi ~/.gitconfig                            // 编辑配置文件
 ```
 
-#### 2. Git 本地仓库（应用场景一）
+### 3. Git 本地仓库
 
 ```shell
 cd + 目标路径
@@ -78,7 +56,7 @@ git reset --hard HEAD^                // 回到上一个版本，可以多加^�
 * 可以在目录下新建个 `.gitignore` 文件，把不需要 `git` 管理的文件/文件夹路径写进去。常见的有`.idea` `.vscode` 等。
 * 在使用 `git reset` 回溯版本之前，一定要确保当前代码已经 `commit` 过了，因为这个操作会使当前没有 `commit` 的变动消失。
 
-#### 3. Git 分支管理（应用场景二）
+### 4. Git 分支管理
 
 ```shell
 git branch                               // 查看现在存在的分支
@@ -87,7 +65,7 @@ git checkout branchName / master         // 切换分支
 history                                  // 查看所有操作记录
 ```
 
-#### 4. Git 合并分支（应用场景三）
+### 5. Git 合并分支
 
 ```shell
 git checkout branchName / master        // 进入要保留的分支
@@ -99,7 +77,7 @@ git branch -d branchName                // 删除分支
 注：
 * 合并分支时会检查代码是否有冲突，有冲突的话需要解决冲突，搜索 `====` 选择要保留的代码，再次合并。
 
-#### 5. 其他操作
+### 6. 其他操作
 
 ```shell
 start .                               // 在资源管理器打开当前文件夹
@@ -111,18 +89,13 @@ git stash pop
 
 
 
-### 二、Github 远程仓库（云端备份）
+# 二、Github 远程仓库
 
-* 应用场景
+### 0. 应用场景
 
-```shell
-我需要同时在公司和家里写代码
-笔记本被女朋友的奶茶泡坏了
-不小心运行了 rm -rf/
-在云端实时备份代码就能解决以上所有问题呢 (ง •̀-•́)ง
-```
+* 代码云端备份 / 代码多地共享 / 团队协作 
 
-#### 1. SSH key 验证身份（关联Github账号）
+### 1. SSH key 验证身份（关联Github账号）
 
 ```shell
 ssh-keygen -t rsa -b 4096 -C + 你的邮箱           // 生成公钥文件
@@ -136,7 +109,7 @@ ssh -T git@github.com                          // 测试配对成功
 * 存在远程仓库，如何与本地建立连接：克隆该仓库的 ssh 地址。
 * 存在本地项目，如何与远程仓库建立连接：初始化本地仓库 ---> `git remote add + 远程仓库ssh地址`
 
-#### 2. 远程仓库操作
+### 2. 远程仓库操作
 
 ```shell
 git remote add origin git@xxxxxxx（ssh）       
@@ -148,10 +121,19 @@ git checkout branchName --> git push -u origin branchName
 git clone git@xxxxxx                           // 下载别人的代码，只能用 https
 git remote -v                                  // 查看链接的远程仓库
 git remote remove brachName                    // 删除仓库
-git remote set-url https：//xx                 // 重置，如果之前弄错了
+git remote set-url <name> https：//xx          // 重置，如果之前弄错了 origin
+```
+
+想要删除远程仓库文件夹，可以这么操作：
+
+```shell
+git rm -r --cached + <filename>
+git commit -m "delete remote file xx"
+git push -u origin master      // 然后把该文件路径加到 .gitignore 中去
 ```
 
 注：
+
 * origin为远程仓库的名字，可以更改但不推荐。
 * [clone下载速度很慢怎么办？](https://jscode.me/t/topic/789/2)
 * Github国内的替代品有：
@@ -161,19 +143,19 @@ git remote set-url https：//xx                 // 重置，如果之前弄错�
 
 
 
-### 三、Github 团队协作
+# 三、Github 团队协作
 
-#### 1. 在拥有对方仓库 `读 / 写` 权限的情况下
+### 1. 在拥有对方仓库 `读 / 写` 权限的情况下
 
 * 将对方仓库 `clone` 到本地进行修改，在对方仓库在新建 `branch` 进行`commit、push` 操作，随后提交 `pull request` ，备注修改内容及意见。
 
-#### 2. 在没有拥有对方仓库 `读 / 写` 权限的情况下
+### 2. 在没有拥有对方仓库 `读 / 写` 权限的情况下
 
 * 将对方仓库 `fork` 到自己仓库，再 `clone` 到本地进行修改，`commit、push` 之后到对方仓库提交 `pull request` ，备注修改内容及意见。
 
 
 
-###  四、实用 Git 技巧
+#  四、实用 Git 技巧
 
 * 快捷键设置
 
