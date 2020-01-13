@@ -80,27 +80,168 @@ keySet();  //返回所有的 key
 
 
 
-# 二、集合框架常见面试问题（敬请期待）
+# 二、剖析集合框架
 
 ### 1. ArrayList 与 LinkedList 区别?
 * 补充内容:RandomAccess接口
 * 补充内容:双向链表和双向循环链表
 * ArrayList 与 Vector 区别呢?为什么要用 ArrayList 取代 Vector 呢？
+  * `Vector` 类的所有方法都是同步的。可以由两个线程安全地访问一个 Vector 对象、但是一个线程访问Vector的话代码要在同步操作上耗费大量的时间。
+  * ArrayList不是同步的，所以在不需要保证线程安全时建议使用 ArrayList。
 * 说一说 ArrayList 的扩容机制吧
-  * 当调用 `ArrayList` 的 `add` 或者 `addAll` 方法的时候，会先进行判定现有容量是否足够，如果不够则会进行 `动态扩容` ，即新建一个更大容量（一般为之前容量的 1.5 倍）的 `ArrayList` ，然后把原有的数据拷贝进去，最后赋值给之前的引用对象。
+  * 当调用 `ArrayList` 的 `add` 或者 `addAll` 方法的时候，会先进行判定现有容量是否足够，如果不够则会进行 `动态扩容` ，即新建一个更大容量（一般为之前容量的 1.5 倍）的 ArrayList，然后把原有的数据拷贝进去，最后赋值给之前的引用对象。
 
-### 2. HashMap 和 Hashtable 的区别
-* HashMap 和 HashSet区别
-* HashSet如何检查重复
-* HashMap的底层实现
-  * JDK1.8之前
-  * JDK1.8之后
-* HashMap 的长度为什么是2的幂次方
-* HashMap 多线程操作导致死循环问题
-* ConcurrentHashMap 和 Hashtable 的区别
-* ConcurrentHashMap线程安全的具体实现方式/底层具体实现
-  * JDK1.7（上面有示意图）
-  * JDK1.8 （上面有示意图）
+### 2. HashMap、HashTable 及 HashSet
+
+#### 2.1 HashMap 和 Hashtable 的区别
+
+* 线程是否安全：HashMap 是非线程安全的，`HashTable` 是线程安全的；HashTable 内部的方法基本都经过`synchronized` 修饰。（如果你要保证线程安全的话就使用 ConcurrentHashMap 吧！）
+* 效率：因为线程安全的问题，HashMap 要比 HashTable 效率高一点。另外，HashTable 基本被淘汰，不要在代码中使用它。
+* 对 Null key 和 Null value 的支持：HashMap 中，null 可以作为键，这样的键只有一个，可以有一个或多个键所对应的值为 null。。但是在 HashTable 中 put 进的键值只要有一个 null，直接抛出 `NullPointerException`。
+* 初始容量大小和每次扩容大小的不同：
+  * 创建时如果不指定容量初始值，Hashtable 默认的初始大小为11，之后每次扩充，容量变为原来的2n+1。HashMap 默认的初始化大小为16。之后每次扩充，容量变为原来的2倍。
+  * 创建时如果给定了容量初始值，那么 Hashtable 会直接使用你给定的大小，而 HashMap 会将其扩充为2的幂次方大小。
+* 底层数据结构：JDK 1.8 以后的 HashMap 在解决哈希冲突时有了较大的变化，当链表长度大于阈值（默认为8）时，将链表转化为红黑树，以减少搜索时间。Hashtable 没有这样的机制。
+
+#### 2.2 HashMap 和 HashSet区别
+
+如果你看过 `HashSet` 源码的话就应该知道：HashSet 底层就是基于 HashMap 实现的。（HashSet 的源码非常非常少，因为除了 `clone() `、`writeObject()`、`readObject()`是 HashSet 自己不得不实现之外，其他方法都是直接调用 HashMap 中的方法。
+
+|              HashMap               |                           HashSet                            |
+| :--------------------------------: | :----------------------------------------------------------: |
+|           实现了Map接口            |                         实现Set接口                          |
+|             存储键值对             |                          仅存储对象                          |
+|   调用 `put（）`向map中添加元素    |              调用 `add（）`方法向Set中添加元素               |
+| HashMap 使用键（Key）计算 HashCode | HashSet 使用成员对象来计算HashCode 值，对于两个对象来说 HashCode 可能相同，所以 equals() 方法用来判断对象的相等性， |
+
+#### 2.3 HashSet 如何检查重复
+
+当你把对象加入`HashSet`时，HashSet会先计算对象的 `HashCode` 值来判断对象加入的位置，同时也会与其他加入的对象的 HashCode 值作比较，如果没有相符的 HashCode，HashSet会假设对象没有重复出现。但是如果发现有相同 HashCode 值的对象，这时会调用`equals（）`方法来检查 HashCode 相等的对象是否真的相同。如果两者相同，HashSet 就不会让加入操作成功。
+
+**HashCode（）与equals（）的相关规定：**
+
+1. 如果两个对象相等，则 HashCode 一定也是相同的。
+2. 两个对象相等，对两个 equals 方法返回 true。
+3. 两个对象有相同的 HashCode 值，它们也不一定是相等的。
+4. 综上，equals 方法被覆盖过，则 HashCode 方法也必须被覆盖，单独重写 equals 方法会让业务中使用哈希数据结构的数据失效。
+5. `hashCode()` 的默认行为是对堆上的对象产生独特值。如果没有重写 hashCode()，则该 class 的两个对象无论如何都不会相等（即使这两个对象指向相同的数据）。
+
+**==与equals的区别**
+
+1. == 是判断两个变量或实例是不是指向同一个内存空间 equals 是判断两个变量或实例所指向的内存空间的值是不是相同
+2. == 是指对内存地址进行比较 equals() 是对字符串的内容进行比较
+3. == 指引用是否相同 equals() 指的是值是否相同
+
+#### 2.4. JDK 1.8 之前 HashMap 的底层实现 
+
+JDK 1.8 之前 `HashMap` 底层是 **数组和链表** 结合在一起使用也就是 链表散列。HashMap 通过 key 的 hashCode 经过 **扰动函数处** 理过后得到 hash 值，然后通过 `(n - 1) & hash` 判断当前元素存放的位置（这里的 n 指的是数组的长度），如果当前位置存在元素的话，就判断该元素与要存入的元素的 hash 值以及 key 是否相同，如果相同的话，直接覆盖，不相同就通过拉链法解决冲突。
+
+* 扰动函数（减少哈希碰撞）
+
+```java
+/* 源码注释：对原有对象的哈希值进行一次补充的哈希运算得到结果值，
+来防止低质量的哈希方程。这是非常重要的，
+因为哈希表用2的幂用为哈希表的长度，在低位bits相同时就会发生哈希碰撞。*/
+
+final int hash(Object k) {
+	h ^= (h >>> 20) ^ (h >>> 12);
+	return h ^ (h >>> 7) ^ (h >>> 4);
+}
+```
+
+* 链地址法解决哈希碰撞
+
+思想：为每个哈希值建立一个单链表，当发生哈希碰撞时，将记录插入到链表中。
+
+![链地址法解决哈希碰撞](/images/HashBucketLinked.png)
+
+#### 2.5 JDK1.8之后 HashMap 的底层实现 
+
+相比于之前的版本， JDK 1.8 之后在解决哈希冲突时有了较大的变化，当链表长度大于阈值（默认为8）时，将链表转化为红黑树，以减少搜索时间。（TreeMap、TreeSet 以及 JDK 1.8 之后的 HashMap 底层都用到了红黑树。）
+
+**为什么选择 8 作为阈值** 
+
+因为理想情况下，随机哈希值遵循参数为 0.5 的泊松分布，如此在同一个哈希桶中出现 8 个以上数据的概率是极低的。
+
+![JDK 1.8 之后的哈希表结构](/images/HashMapTreeSet.jpeg)
+
+JDK 1.8 的 hash 方法相比于 JDK 1.7 hash 方法原理不变，但是减少了扰动次数，更加简化，并提高了运算性能。
+
+```java
+/* 源码注释：将哈希值的较高位对低位进行异或运算，来避免低位相同、只有高位不同的哈希值发生的碰撞。
+这是一种在速度、实用性和位扩展之间的权衡。因此我们用最便宜的方式，减少系统损失，以及合并高位哈希值
+的影响，否则这些高位哈希值将由于哈希表长度范围的限制永远不会在索引计算中使用*/
+
+static final int hash(Object key) {
+        int h;
+        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
+}
+```
+
+#### 2.6 HashMap 灵魂拷问
+
+**HashMap 的长度为什么是2的幂次方**
+
+相比于 % 取模，哈希表选择 `(n - 1) & hash` 这个更高效率的按位与运算作为哈希桶的索引运算，2^n 的二进制为 10000.. 而这样哈希桶的最大 index = 2^n -1，二进制就成了 01111.. 再与对象的哈希值做按位与运算，就能快速的计算出对应哈希桶 index 值，并且是分布均匀的。
+
+若在创建哈希表时给定初始容量，哈希表也会用 `roundUpToPowerOf2` / `tableSizeFor` 将其扩充为2的幂次方大小。
+
+```java
+// Returns a power of two size for the given target capacity. 
+
+static final int tableSizeFor(int cap) {
+	int n = cap - 1;
+    n |= n >>> 1;
+    n |= n >>> 2;
+    n |= n >>> 4;
+    n |= n >>> 8;
+    n |= n >>> 16;
+    return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
+}
+```
+
+**负载系数为什么是 0.75**
+
+默认的负载系数 0.75 在时间和空间成本之间提供了一个很好的权衡。 较高的值会减少空间开销，但会增加查找成本（比如在 get / put 操作时）。设置其初始容量时，应考虑预期的哈希桶的数量及其负载因子，以最大程度地减少 `rehash` （扩容中重新计算哈希值） 操作的数量。 如果初始容量大于 最大数据量 / 负载因子，则将不会发生任何 rehash 操作。
+
+**HashMap CVE 安全隐患**
+
+`Tomcat` 在2011年邮件中报道了哈希表可以通过精心构造的恶意 http 请求造成链表性能退化，并引发网站 DoS 拒绝服务攻击的现象。这个问题在 JDK 7 中得到了解决：对传进来的字符串进行特殊的哈希运算 `stringHash32` ，来避免恶意的字符串传值造成的哈希表链表性能退化的情况。
+
+```java
+final int hash(Object k) {
+	if (0 != h && k instanceof String) {
+		return sun.misc.Hashing.stringHash32((String) k);
+	}
+    ...
+}
+```
+
+**HashMap resize 性能问题**
+
+哈希表在扩容 `resize` 时是效率非常低的，如果业务需要频繁往哈希表中插入数据，那就在创建哈希表的时候就指定一个容量。避免未来扩容带来的性能问题，以空间换时间。
+
+**HashMap 多线程操作导致死循环问题**
+
+主要原因在于并发下 HashMap 扩容时，往新的 HashMap 转移数据可能产生循环链表（此处链表插入是往前插入的，导致和原哈希桶中的位置相反，产生环形链表），导致之后在该哈希桶中搜索键值时可能会发生的死锁现象。[详情查看：HashMap 的死循环](https://coolshell.cn/articles/9606.html)
+
+不过，JDK 1.8 后解决了这个问题（使用了保持顺序的扩容 transfer 操作），但是还是不建议在多线程下使用 HashMap，因为多线程下使用 HashMap 还是会存在其他问题比如数据丢失。并发环境下推荐使用 ConcurrentHashMap 。
+
+**ConcurrentHashMap 和 Hashtable 的区别**
+
+`Hashtable` ：将 get / put 所有相关操作都 synchronized 化，这相当于给整个哈希表加了一把**大锁**，多线程访问时候，只要有一个线程访问或操作该对象，那其他线程只能阻塞，相当于将所有的操作**串行化**，在竞争激烈的并发场景中性能就会非常差。
+
+![HashTable 的全表锁](/images/HashTableLock.png)
+
+`ConcurrentHashMap`：对整个桶数组进行了分割分段 Segment，每一把锁只锁容器其中一部分数据，多线程访问容器里不同数据段的数据，就不会存在锁竞争，提高并发访问率。 
+
+一个 ConcurrentHashMap 里包含一个 Segment 数组。Segment 的结构和 HashMap 类似，是一种数组和链表结构，一个 Segment 包含一个 HashEntry 数组，每个 HashEntry 是一个链表结构的元素，每个 Segment 守护着一个HashEntry 数组里的元素，当对 HashEntry 数组的数据进行修改时，必须首先获得对应的 Segment的锁。
+
+![JDK 1.8 之前 ConrrentHashMap 的分段锁](/images/HashMapSegmentsLock.png)
+
+到了 JDK 1.8 的时候已经摒弃了分段锁，而是直接用 Node 数组 + 链表 + 红黑树的数据结构来实现，并发控制使用 synchronized 和 CAS 来操作。（ JDK 1.6 以后 对 synchronized 锁做了很多优化， 整个看起来就像是优化过且线程安全的 HashMap，虽然在 JDK 1.8 中还能看到 Segment 的数据结构，但是已经简化了属性，只是为了兼容旧版本）
+
+![JDK 1.8 后的并发哈希表的锁](/images/HashMapLock.jpeg)
 
 ### 3. comparable 和 Comparator的区别
 
