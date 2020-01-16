@@ -1,5 +1,5 @@
 ---
-title: "Maven：包管理与冲突解决"
+title: "Maven：生命周期、插件及包管理"
 author: "Chenghao Zheng"
 tags: ["Tools"]
 categories: ["Study notes"]

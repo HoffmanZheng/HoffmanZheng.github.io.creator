@@ -9,7 +9,7 @@ draft: false
 
 
 
-本篇介绍 Java 中的集合类框架的基础知识，其源码实现、相关面试题会在之后更新，敬请期待。
+本篇介绍 Java 中的集合类框架的基础知识，并对 HashMap 的源码进行剖析，具体介绍 JDK 1.8 对 HashMap 所做的改动。关于这些集合类的线程安全问题，会在我的另一篇博客 `Java：多线程下的安全容器` 中进行详细的分析。
 
 
 
@@ -227,21 +227,7 @@ final int hash(Object k) {
 
 不过，JDK 1.8 后解决了这个问题（使用了保持顺序的扩容 transfer 操作），但是还是不建议在多线程下使用 HashMap，因为多线程下使用 HashMap 还是会存在其他问题比如数据丢失。并发环境下推荐使用 ConcurrentHashMap 。
 
-**ConcurrentHashMap 和 Hashtable 的区别**
 
-`Hashtable` ：将 get / put 所有相关操作都 synchronized 化，这相当于给整个哈希表加了一把**大锁**，多线程访问时候，只要有一个线程访问或操作该对象，那其他线程只能阻塞，相当于将所有的操作**串行化**，在竞争激烈的并发场景中性能就会非常差。
-
-![HashTable 的全表锁](/images/HashTableLock.png)
-
-`ConcurrentHashMap`：对整个桶数组进行了分割分段 Segment，每一把锁只锁容器其中一部分数据，多线程访问容器里不同数据段的数据，就不会存在锁竞争，提高并发访问率。 
-
-一个 ConcurrentHashMap 里包含一个 Segment 数组。Segment 的结构和 HashMap 类似，是一种数组和链表结构，一个 Segment 包含一个 HashEntry 数组，每个 HashEntry 是一个链表结构的元素，每个 Segment 守护着一个HashEntry 数组里的元素，当对 HashEntry 数组的数据进行修改时，必须首先获得对应的 Segment的锁。
-
-![JDK 1.8 之前 ConrrentHashMap 的分段锁](/images/HashMapSegmentsLock.png)
-
-到了 JDK 1.8 的时候已经摒弃了分段锁，而是直接用 Node 数组 + 链表 + 红黑树的数据结构来实现，并发控制使用 synchronized 和 CAS 来操作。（ JDK 1.6 以后 对 synchronized 锁做了很多优化， 整个看起来就像是优化过且线程安全的 HashMap，虽然在 JDK 1.8 中还能看到 Segment 的数据结构，但是已经简化了属性，只是为了兼容旧版本）
-
-![JDK 1.8 后的并发哈希表的锁](/images/HashMapLock.jpeg)
 
 ### 3. comparable 和 Comparator的区别
 
