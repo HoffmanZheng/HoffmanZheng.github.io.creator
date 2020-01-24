@@ -25,7 +25,7 @@ Git 工作流程：
 
 ### 2. 配置 Git
 
-```shell
+```powershell
 git config --global user.name + 你的英文名
 git config --global user.email + 你的邮箱
 git config --global push.default simple
