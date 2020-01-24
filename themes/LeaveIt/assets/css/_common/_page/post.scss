@@ -93,16 +93,16 @@
         }
 
         code:not([class]) {
-            padding: 5px 5px;
-            background: #fff;
-            border: 1px solid #ddd;
-            box-shadow: 1px 1px 0 #fff, 2px 2px 0 #ddd;
+            padding: 2px 4px;
+            background: #f9f2f4;
+            color: #ef3982;
+            border-radius: 2px;
             margin-left: 3px;
             margin-right: 3px;
-
+    
             .dark-theme &:not([class]) {
-                background: transparent;
-                box-shadow: 1px 1px 0 $dark-font-secondary-color, 2px 2px 0 $dark-font-secondary-color;
+                background: #2d2d2d;
+                color: #e06c75;
             }
         }
         
