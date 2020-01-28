@@ -53,7 +53,7 @@ git reset --hard HEAD^                // 回到上一个版本，可以多加^�
 
 注：
 * 可以在目录下新建个 `.gitignore` 文件，把不需要 Ｇit 管理的文件/文件夹路径写进去。常见的有`.idea` `.vscode` `out` `*.iml` `target/` `build/` `.gradle/`  等。
-* 在使用 `git reset` 回溯版本之前，一定要确保当前代码已经 `commit` 过了，因为这个操作会使当前没有 commit 的变动消失。
+* 在使用 `git reset` 回溯版本之前，一定要 **确保当前代码已经 commit 过了**，因为这个操作会使当前没有 commit 的变动消失。
 
 ### 4. Git 分支管理
 
@@ -132,7 +132,7 @@ git push -u origin master      // 然后把该文件路径加到 .gitignore 中�
 注：
 
 * origin为远程仓库的名字，可以更改但不推荐。
-* [clone下载速度很慢怎么办？](https://jscode.me/t/topic/789/2)
+* [clone下载速度很慢怎么办？](https://github.com/sun-shadow/Surf_the_Internet/blob/master/%E5%91%BD%E4%BB%A4%E8%A1%8C%E7%AF%87.md)
 * Github国内的替代品有：
 	* [腾讯云开发者平台](https://dev.tencent.com/)
 	* [码云Gitee](https://gitee.com/)
@@ -149,7 +149,7 @@ git push -u origin master      // 然后把该文件路径加到 .gitignore 中�
 将对方仓库 `fork` 到自己仓库，再 clone 到本地进行修改，commit、push 之后到对方仓库提交 `pull request` ，备注修改内容及意见。
 
 * 项目提交的原则，规范化的项目提交流程：
-  * 使用 Github + 主干 / 分支模型进行开发，禁止直接 push 到 master 分支造成主分支损坏。
+  * 使用 Github + 主干 / 分支模型进行开发，禁止直接 push 到 master 分支造成 **主分支损坏**。
   * 一次提交不宜提交过多的内容，方便集中精力和 Code Review，同时也便于测试。
 
   * 遵循一切工作自动化原则：包括数据库建表、创造测试数据，几乎没有本地依赖，方便在其他人的机器上重现过程。
@@ -195,7 +195,7 @@ git commit --amend
 
 ### 3. 使用 rebase 优化 commit 提交历史
 
-对于已经提交的，杂乱无章的 commit，可以使用 rebase 来进行整理及优化。优于rebase操作较为危险，推荐先将主分支内容复制到新的分支进行操作。
+对于已经提交的，杂乱无章的 commit，可以使用 rebase 来进行整理及优化。由于 rebase 操作较为危险，推荐先将主分支内容复制到新的分支进行操作。
 
 ```shell
 git rebase -i HEAD~11        // interactive，修改当前commit前11个提交
@@ -238,5 +238,9 @@ git push -f rebaseOptimizeCommit:master
   需要注意的是，squash merge 并不会替你产生提交，而是产生一个新的 commit，需要你重新输出 commit 日志，再手动执行 git commit 操作；这个 commit **可能会变更提交者作者信息**，可能提交者并不是有原来 dev 分支上的开发人员，这将对代码实际贡献者的追溯产生困难。
 
 * `Rebase and merge`：可手动选择需要 合并 / 保留 的 commit，并保留提交者的作者信息。直接把提交的几个 commit 平移到主分支上来。
+
+### 5. 推荐阅读
+
+[Git 如何优雅地回退代码](https://mp.weixin.qq.com/s/XGwAZ-o4WT5FxN_PYXFEXw)
 
 

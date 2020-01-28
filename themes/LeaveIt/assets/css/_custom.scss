@@ -144,26 +144,6 @@ pre code /*代码块*/
      font-family: Consolas, Inconsolata, Courier, monospace;
      border-radius: 0px;
 }
-blockquote { /*引用块*/
-  display: block;
-  padding: 15px 1rem;
-  font-size: 0.9em;
-  padding-right: 15px;
-  margin: 1em 0;
-  
-  /*更改默认值*/
-  color: #000000;
-  border-left: 5px solid rgb(239,112,96);
-  background: #EFEBE9;
-  
-  overflow: auto;
-  overflow-scrolling: touch; 
-  word-wrap: normal;
-  word-break: normal;  
-}
-blockquote p {
-    margin: 0px;
-}
 
 strong  /*强调*/
 {

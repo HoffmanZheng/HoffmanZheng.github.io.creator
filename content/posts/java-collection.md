@@ -1,5 +1,5 @@
 ---
-title: "Java：Collection、Map 工具类及常见方法"
+title: "Java：Collection、Map 集合工具类"
 author: "Chenghao Zheng"
 tags: ["Java"]
 categories: ["Study notes"]
@@ -7,7 +7,7 @@ date: 2020-01-02T16:11:47+01:00
 draft: false
 ---
 
-本篇介绍 Java 中的集合类框架的基础知识，并重点对 HashMap 的源码进行剖析，具体介绍 JDK 1.8 对 HashMap 所做的改动。关于这些集合类的线程安全问题，会在我的另一篇博客 `Java：多线程下的安全容器` 中进行详细的分析。
+本篇介绍 Java 中集合类框架的基础知识，包括 List，Set，Map。此外，关于使用频率最高的容器 HashMap 则会在另一篇博文 [Java：HashMap 源码解读](http://chenghao.monster/2020/java-hashmap/) 中详细分析；关于这些集合类的线程安全问题，会在 [Java：多线程下的安全容器](http://chenghao.monster/2020/java-thread-safe-collection/) 中进行讲述。
 
 
 
@@ -80,32 +80,83 @@ keySet();  //返回所有的 key
 
 # 集合类灵魂拷问
 
-### 1. List 列表相关
+### 1. ArrayList、Vector 及 LinkedList
 
 #### 1.1 ArrayList 与 LinkedList 区别
 
-#### 1.2 补充内容:RandomAccess接口
+* 是否线程安全：两者都是不同步的，都不保证线程安全。
 
-#### 1.3 补充内容:双向链表和双向循环链表
+* 底层数据结构：ArrayList 底层使用的是 Object 数组；LinkedList 底层使用的是 双向链表数据结构（JDK 1.6之前为循环链表，JDK 1.7 取消了循环）。
+* 插入和删除是否受元素位置的影响： 
+  * ArrayList 采用数组存储，所以插入和删除元素的时间复杂度受元素位置的影响。 比如：执行 `add(E e)` 方法的时候， ArrayList 会默认在将指定的元素追加到此列表的末尾，这种情况时间复杂度就是O(1)。但是如果要在指定位置 i 插入和删除元素的话 `add(int index, E element)` 时间复杂度就为 O(n-i)。因为在进行上述操作的时候集合中第 i 和第 i 个元素之后的 (n-i) 个元素都要执行向后位/向前移一位的复制操作。 
+  * LinkedList 采用链表存储，所以对于 add(E e) 方法的插入，删除元素时间复杂度不受元素位置的影响，近似 O(1)，如果是要在指定位置 i 插入和删除元素的话 `add(int index, E element)` 时间复杂度近似为O(n) 因为需要先移动到指定位置再插入。
+* 是否支持快速随机访问：LinkedList 不支持高效的随机元素访问，而 ArrayList 支持。快速随机访问就是通过元素的序号快速获取元素对象（对应于get(int index) 方法）。
+* 内存空间占用： ArrayList 的空间浪费主要体现在 List 列表的结尾会预留一定的容量空间，而 LinkedList 的空间花费则体现在它的每一个元素都需要消耗比 ArrayList 更多的空间（因为要存放直接后继和直接前驱以及数据）。
 
-#### 1.4 ArrayList 与 Vector 区别呢?为什么要用 ArrayList 取代 Vector 呢？
+#### 1.2 RandomAccess 接口
 
-* `Vector` 类的所有方法都是同步的。可以由两个线程安全地访问一个 Vector 对象、但是一个线程访问Vector的话代码要在同步操作上耗费大量的时间。
-* ArrayList不是同步的，所以在不需要保证线程安全时建议使用 ArrayList。
+ `RandomAccess` 接口声明了一个约定：实现这个接口的类具有随机访问功能。
 
-#### 1.5 说一说 ArrayList 的扩容机制吧
+`Collections.binarySearch` 方法中，会先判断 List 是否是 RandomAccess 的实例，然后调用不同的二分查找方法。
 
-* 当调用 `ArrayList` 的 `add` 或者 `addAll` 方法的时候，会先进行判定现有容量是否足够，如果不够则会进行 `动态扩容` ，即新建一个更大容量（一般为之前容量的 1.5 倍）的 ArrayList，然后把原有的数据拷贝进去，最后赋值给之前的引用对象。
+```java
+public static <T>
+    int binarySearch(List<? extends Comparable<? super T>> list, T key) {
+        if (list instanceof RandomAccess || list.size()<BINARYSEARCH_THRESHOLD)
+            return Collections.indexedBinarySearch(list, key);
+        else
+            return Collections.iteratorBinarySearch(list, key);
+    }
+```
+
+ArrayList 实现了 RandomAccess 接口，而 LinkedList 没有实现。
+
+* 即声明了 ArrayList 具有快速随机访问的功能，它的底层是数组，数组天然支持随机访问，时间复杂度为 O(1)。
+* 声明了 LinkedList 不具有随机访问的功能，它的底层是链表。链表需要遍历到特定位置才能访问特定位置的元素，时间复杂度为 O(n)。
+* 实现了 RandomAccess 接口的 List，优先选择普通 for 循环 遍历，其次 foreach。
+* 未实现 RandomAccess 接口的 List，优先选择 iterator 遍历（foreach遍历底层也是通过iterator实现的）大 size 的数据，**千万不要使用普通 for 循环**。
+
+#### 1.3 双向链表和双向循环链表
+
+* 双向链表： 包含两个指针，一个prev指向前一个节点，一个next指向后一个节点。
+
+![](/images/双向链表.png)
+
+* 双向循环链表： 最后一个节点的 next 指向head，而 head 的prev指向最后一个节点，构成一个环。
+
+![](/images/循环双向链表.jpg)
+
+#### 1.4 ArrayList 与 Vector 的区别，为什么要用 ArrayList 取代 Vector 
+
+* `Vector` 类通过将所有的方法声明 synchronized 来保证数据的线程安全。但同步的确是整个 vector 实例，导致一个线程在访问实例时，其他线程都需要等待的尴尬情形，较大的同步开销完全不符合并发设计的初衷。此外，多线程下对 verctor 的复合操作（如遍历+修改）仍会导致 **并发修改异常**。
+* ArrayList 不是同步的，所以在不需要保证线程安全时建议使用 ArrayList。
+
+#### 1.5 ArrayList 的扩容机制
+
+* 当调用 ArrayList 的 add 或者 addAll 方法的时候，会先进行判定现有容量是否足够 `ensureCapacity`，如果不够则会进行 `动态扩容` ，即新建一个更大容量（一般为之前容量的 1.5 倍）的 ArrayList，然后把原有的数据拷贝进去，最后赋值给之前的引用对象。
+* 如果要在指定位置 i 插入和删除元素的话 `add(int index, E element)`，会调用 `System.arraycopy` 来实现 i 位置及之后元素的移动；而在扩容时则调用了 `Arrays.copyOf` 方法
+
+```java
+public static native void arraycopy(Object src, int srcPos,
+                           Object dest, int destPos, int length);
+
+public static int[] copyOf(int[] original, int newLength) {
+        int[] copy = new int[newLength];
+        System.arraycopy(original, 0, copy, 0,
+                         Math.min(original.length, newLength));
+        return copy;
+    }
+```
 
 ### 2. HashMap、HashTable 及 HashSet
 
 #### 2.1 HashMap 和 Hashtable 的区别
 
-* 线程是否安全：HashMap 是非线程安全的，`HashTable` 是线程安全的；HashTable 内部的方法基本都经过`synchronized` 修饰。（如果你要保证线程安全的话就使用 ConcurrentHashMap 吧！）
+* 线程是否安全：HashMap 是非线程安全的，`HashTable` 是线程安全的；HashTable 内部的方法基本都经过 `synchronized` 修饰。（如果你要保证线程安全的话就使用 ConcurrentHashMap 吧！）
 * 效率：因为线程安全的问题，HashMap 要比 HashTable 效率高一点。另外，HashTable 基本被淘汰，不要在代码中使用它。
 * 对 Null key 和 Null value 的支持：HashMap 中，null 可以作为键，这样的键只有一个，可以有一个或多个键所对应的值为 null。。但是在 HashTable 中 put 进的键值只要有一个 null，直接抛出 `NullPointerException`。
 * 初始容量大小和每次扩容大小的不同：
-  * 创建时如果不指定容量初始值，Hashtable 默认的初始大小为11，之后每次扩充，容量变为原来的2n+1。HashMap 默认的初始化大小为16。之后每次扩充，容量变为原来的2倍。
+  * 创建时如果不指定容量初始值，Hashtable 默认的初始大小为11，之后每次扩充，容量变为原来的 2n+1。HashMap 默认的初始化大小为16。之后每次扩充，容量变为原来的2倍。
   * 创建时如果给定了容量初始值，那么 Hashtable 会直接使用你给定的大小，而 HashMap 会将其扩充为2的幂次方大小。
 * 底层数据结构：JDK 1.8 以后的 HashMap 在解决哈希冲突时有了较大的变化，当链表长度大于阈值（默认为8）时，将链表转化为红黑树，以减少搜索时间。Hashtable 没有这样的机制。
 
@@ -115,22 +166,30 @@ keySet();  //返回所有的 key
 
 |              HashMap               |                           HashSet                            |
 | :--------------------------------: | :----------------------------------------------------------: |
-|           实现了Map接口            |                         实现Set接口                          |
+|          实现了 Map 接口           |                        实现 Set 接口                         |
 |             存储键值对             |                          仅存储对象                          |
-|   调用 `put（）`向map中添加元素    |              调用 `add（）`方法向Set中添加元素               |
+|    调用 `put()`向map中添加元素     |               调用 `add()`方法向Set中添加元素                |
 | HashMap 使用键（Key）计算 HashCode | HashSet 使用成员对象来计算HashCode 值，对于两个对象来说 HashCode 可能相同，所以 equals() 方法用来判断对象的相等性， |
 
 #### 2.3 HashSet 如何检查重复
 
-当你把对象加入`HashSet`时，HashSet会先计算对象的 `HashCode` 值来判断对象加入的位置，同时也会与其他加入的对象的 HashCode 值作比较，如果没有相符的 HashCode，HashSet会假设对象没有重复出现。但是如果发现有相同 HashCode 值的对象，这时会调用`equals（）`方法来检查 HashCode 相等的对象是否真的相同。如果两者相同，HashSet 就不会让加入操作成功。
+当你把对象加入 `HashSet` 时，HashSet 会先计算对象的 `HashCode` 值来判断对象加入的位置，同时也会与其他加入的对象的 HashCode 值作比较，如果没有相符的 HashCode，HashSet 会假设对象没有重复出现。但是如果发现有相同 HashCode 值的对象，这时会调用`equals()`方法来检查 HashCode 相等的对象是否真的相同。如果两者相同，HashSet 就不会让加入操作成功。
 
-**HashCode（）与equals（）的相关规定：**
+* hashCode() 约定
 
-1. 如果两个对象相等，则 HashCode 一定也是相同的。
-2. 两个对象相等，对两个 equals 方法返回 true。
-3. 两个对象有相同的 HashCode 值，它们也不一定是相等的。
-4. 综上，equals 方法被覆盖过，则 HashCode 方法也必须被覆盖，单独重写 equals 方法会让业务中使用哈希数据结构的数据失效。
-5. `hashCode()` 的默认行为是对堆上的对象产生独特值。如果没有重写 hashCode()，则该 class 的两个对象无论如何都不会相等（即使这两个对象指向相同的数据）。
+> 1. 假如没有 equals 的比较信息被修改，无论何时在 Java 程序执行期间，hashCode 方法在同一个对象上的多次调用都必须始终返回相同的整数。~~这个整数在一个应用程序的一次执行到另一次执行不必保持一致。~~
+> 2. 如果两个对象相等（根据 equals 方法），那么在每个对象上调用 hashCode 方法都必须产生相同的整数结果。
+> 3. 如果两个对象不相等， hashCode 方法一定要产生不同的整数结果，则是没有被要求的。然而编程者需要知晓，不相等的对象产生不同的哈希值可能会提高哈希表的性能表现。
+
+* equals() 约定
+
+> 反射性、对称性、传递性、一致性
+>
+> 对于一个非空引用，`x.equals(null)` 应当返回 false
+
+* 综上，如果 equals 方法被覆盖过，则 HashCode 方法也必须被覆盖，单独重写 equals 方法会让业务中使用哈希数据结构的数据失效。
+
+* `hashCode()` 的默认行为是对堆上的对象产生独特值。如果没有重写 hashCode()，则该 class 的两个对象无论如何都不会相等（即使这两个对象指向相同的数据）。
 
 **==与equals的区别**
 
@@ -169,7 +228,7 @@ public  class Person implements Comparable<Person> {
         this.age = age;
     }
 
-   // TODO重写compareTo方法实现按年龄来排序
+   // 重写 compareTo 方法实现按年龄来排序
     @Override
     public int compareTo(Person o) {
         // TODO Auto-generated method stub
@@ -185,111 +244,10 @@ public  class Person implements Comparable<Person> {
 
 ### 4. 如何选用集合?
 
-* 主要根据集合的特点来选用，比如我们需要根据键值获取到元素值时就选用 Map 接口下的集合，需要排序时选择 TreeMap，不需要排序时就选择HashMap,需要保证线程安全就选用 ConcurrentHashMap。
-* 当我们只需要存放元素值时，就选择实现Collection接口的集合，需要保证元素唯一时选择实现 Set 接口的集合比如 TreeSet 或 HashSet，不需要就选择实现 List 接口的比如 ArrayList 或 LinkedList，然后再根据实现这些接口的集合的特点来选用。
+* 主要根据集合的特点来选用，比如我们需要根据键值获取到元素值时就选用 Map 接口下的集合，需要排序时选择 TreeMap，不需要排序时就选择 HashMap，需要保证线程安全就选用 ConcurrentHashMap。
+* 当我们只需要存放元素值时，就选择实现 Collection 接口的集合，需要保证元素唯一时选择实现 Set 接口的集合比如 TreeSet 或 HashSet，不需要就选择实现 List 接口的比如 ArrayList 或 LinkedList，然后再根据实现这些接口的集合的特点来选用。 
 
 
 
-# 三、HashMap 源码剖析
 
-### 1. HashMap 源码剖析
-
-#### 1.1 HashMap 的长度为什么是2的幂次方
-
-相比于 % 取模，哈希表选择 `(n - 1) & hash` 这个更高效率的按位与运算作为哈希桶的索引运算，2^n 的二进制为 10000.. 而这样哈希桶的最大 index = 2^n -1，二进制就成了 01111.. 再与对象的哈希值做按位与运算，就能快速的计算出对应哈希桶 index 值，并且是分布均匀的。
-
-若在创建哈希表时给定初始容量，哈希表也会用 `roundUpToPowerOf2` / `tableSizeFor` 将其扩充为2的幂次方大小。
-
-```java
-// Returns a power of two size for the given target capacity. 
-
-static final int tableSizeFor(int cap) {
-	int n = cap - 1;
-    n |= n >>> 1;
-    n |= n >>> 2;
-    n |= n >>> 4;
-    n |= n >>> 8;
-    n |= n >>> 16;
-    return (n < 0) ? 1 : (n >= MAXIMUM_CAPACITY) ? MAXIMUM_CAPACITY : n + 1;
-}
-```
-
-#### 1.2 负载系数为什么是 0.75
-
-默认的负载系数 0.75 在时间和空间成本之间提供了一个很好的权衡。 较高的值会减少空间开销，但会增加查找成本（比如在 get / put 操作时）。设置其初始容量时，应考虑预期的哈希桶的数量及其负载因子，以最大程度地减少 `rehash` （扩容中重新计算哈希值） 操作的数量。 如果初始容量大于 最大数据量 / 负载因子，则将不会发生任何 rehash 操作。
-
-### 2. JDK 1.8 之前 HashMap 的底层实现 
-
-#### 2.1 JDK 1.8 之前的 HashMap 存在的问题
-
-* HashMap CVE 安全隐患
-
-`Tomcat` 在2011年邮件中报道了哈希表可以通过精心构造的恶意 http 请求造成链表性能退化，并引发网站 DoS 拒绝服务攻击的现象。这个问题在 JDK 7 中得到了解决：对传进来的字符串进行特殊的哈希运算 `stringHash32` ，来避免恶意的字符串传值造成的哈希表链表性能退化的情况。
-
-```java
-final int hash(Object k) {
-	if (0 != h && k instanceof String) {
-		return sun.misc.Hashing.stringHash32((String) k);
-	}
-    ...
-}
-```
-
-* HashMap 多线程操作导致死循环问题
-
-主要原因在于并发下 HashMap 扩容时，往新的 HashMap 转移数据可能产生循环链表（此处链表插入是往前插入的，导致和原哈希桶中的位置相反，产生环形链表），导致之后在该哈希桶中搜索键值时可能会发生的死锁现象。[详情查看：HashMap 的死循环](https://coolshell.cn/articles/9606.html)
-
-不过，JDK 1.8 后解决了这个问题（使用了保持顺序的扩容 transfer 操作），但是还是不建议在多线程下使用 HashMap，因为多线程下使用 HashMap 还是会存在其他问题比如数据丢失。并发环境下推荐使用 ConcurrentHashMap 。
-
-#### 2.2 JDK 1.8 之前的 HashMap 源码
-
-JDK 1.8 之前 `HashMap` 底层是 **数组和链表** 结合在一起使用也就是 链表散列。HashMap 通过 key 的 hashCode 经过 **扰动函数处** 理过后得到 hash 值，然后通过 `(n - 1) & hash` 判断当前元素存放的位置（这里的 n 指的是数组的长度），如果当前位置存在元素的话，就判断该元素与要存入的元素的 hash 值以及 key 是否相同，如果相同的话，直接覆盖，不相同就通过拉链法解决冲突。
-
-* 扰动函数（减少哈希碰撞）
-
-```java
-/* 源码注释：对原有对象的哈希值进行一次补充的哈希运算得到结果值，
-来防止低质量的哈希方程。这是非常重要的，
-因为哈希表用2的幂用为哈希表的长度，在低位bits相同时就会发生哈希碰撞。*/
-
-final int hash(Object k) {
-	h ^= (h >>> 20) ^ (h >>> 12);
-	return h ^ (h >>> 7) ^ (h >>> 4);
-}
-```
-
-* 链地址法解决哈希碰撞
-
-思想：为每个哈希值建立一个单链表，当发生哈希碰撞时，将记录插入到链表中。
-
-![链地址法解决哈希碰撞](/images/HashBucketLinked.png)
-
-### 3. JDK1.8之后 HashMap 的底层实现 
-
-相比于之前的版本， JDK 1.8 之后在解决哈希冲突时有了较大的变化，当链表长度大于阈值（默认为8）时，将链表转化为红黑树，以减少搜索时间。（TreeMap、TreeSet 以及 JDK 1.8 之后的 HashMap 底层都用到了红黑树。）
-
-**为什么选择 8 作为阈值** 
-
-因为理想情况下，随机哈希值遵循参数为 0.5 的泊松分布，如此在同一个哈希桶中出现 8 个以上数据的概率是极低的。
-
-![JDK 1.8 之后的哈希表结构](/images/HashMapTreeSet.jpeg)
-
-JDK 1.8 的 hash 方法相比于 JDK 1.7 hash 方法原理不变，但是减少了扰动次数，更加简化，并提高了运算性能。
-
-```java
-/* 源码注释：将哈希值的较高位对低位进行异或运算，来避免低位相同、只有高位不同的哈希值发生的碰撞。
-这是一种在速度、实用性和位扩展之间的权衡。因此我们用最便宜的方式，减少系统损失，以及合并高位哈希值
-的影响，否则这些高位哈希值将由于哈希表长度范围的限制永远不会在索引计算中使用*/
-
-static final int hash(Object key) {
-        int h;
-        return (key == null) ? 0 : (h = key.hashCode()) ^ (h >>> 16);
-}
-```
-
-
-
-**HashMap resize 性能问题**
-
-哈希表在扩容 `resize` 时是效率非常低的，如果业务需要频繁往哈希表中插入数据，那就在创建哈希表的时候就指定一个容量。避免未来扩容带来的性能问题，以空间换时间。
 
