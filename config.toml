@@ -43,7 +43,7 @@ preserveTaxonomyNames = true
     since = 2019
     author = "Chenghao.Zheng"                     # Author's name
     avatar = "/images/me/avatar1.png"           # Author's avatar
-    subtitle = "We live, we die, alone."         # Subtitle
+    subtitle = "写码五分钟，调试一晚上。"         # Subtitle
     cdn_url = ""           # Base CDN URL
     home_mode = "" # post or other
 

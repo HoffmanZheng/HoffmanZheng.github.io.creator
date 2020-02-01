@@ -168,18 +168,11 @@ alias gc="git commit -v"
 alias gp="git push"
 alias gst="git status"
 alias gco="git checkout"
-alias glog="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative"                                    // 美化git log输出
+alias glog="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative" 
+// 美化git log输出为漂亮的单行形式
 alias glo="git log --oneline"
 source ~/.bash_profile                                    // 让它生效
 ```
-
-`git log` 美化前：
-
-![](/images/gitlog美化前.png)
-
-美化后：
-
-![](/images/log美化后.png)
 
 ### 2. 简化 commit 提交历史
 
@@ -201,10 +194,6 @@ git commit --amend
 git rebase -i HEAD~11        // interactive，修改当前commit前11个提交
 ```
 
-commit 提交历史优化前：
-
-![](/images/rebase优化前.png)
-
 进入 rebase 交互界面后，提交历史的顺序会倒置，最新的提交在最下面，个人常用的优化选项为 fixup 和 edit，将左侧 pick 更改为相应的优化选项，保存退出后就进入优化流程。
 
 ![](/images/rebase具体操作.png)
@@ -213,17 +202,11 @@ commit 提交历史优化前：
 
 ![](/images/rebase流程.png)
 
-commit 提交历史优化后：
-
-![](/images/rebase之后.png)
-
 将优化后的 commit push 到 Github：
 
 ```shell
 git push -f rebaseOptimizeCommit:master
 ```
-
-![](/images/rebase后同步到github.png)
 
 ### 4. 三种不同的 merge pull request 操作
 

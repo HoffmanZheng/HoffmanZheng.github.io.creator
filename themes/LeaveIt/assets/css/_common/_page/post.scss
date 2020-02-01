@@ -85,11 +85,12 @@
 
         code,
         pre {
-            padding: 7px;
-            font-size: 13px;
+            padding: 12px;
+            font-size: 15px;
             font-family: Consolas, Monaco, Menlo, Consolas, monospace;
             word-break: break-all;
             word-wrap: break-word;
+            line-height: 25px; 
         }
 
         code:not([class]) {
