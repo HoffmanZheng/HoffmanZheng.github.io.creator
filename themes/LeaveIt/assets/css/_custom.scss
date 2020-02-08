@@ -54,24 +54,23 @@
 }
 
 p {/*段落*/
-  margin: 1.7em 0px;/*更改默认的段落距离*/
+  margin: 1.6em 0px;/*更改默认的段落距离*/
 }
 h1,h2,h3,h4,h5,h6 {
-  margin: 1.6em 0px;/*增加默认的标题间距*/
-  font-weight:bold;
+  margin: .8em 0px;/*增加默认的标题间距*/
+  font-weight: bold;
 }
 h1 {
-  font-size: 1.6em  ;
- 
+  font-size: 1.8em;
 }
 h2 {
-  font-size: 1.4em;
+  font-size: 1.5em;
 }
 h3 {
   font-size: 1.3em;
 }
 h4 {
-  font-size: 1.2em;
+  font-size: 1.15em;
 }
 h5 {
   font-size: 1em;
@@ -158,6 +157,7 @@ img
   margin:0 auto;  /*图片水平居中*/
   /* margin:0 0;  */ /*图片水平居左，如需要请打开*/
   max-width:100%;
+  padding-bottom: .8em
 }
 figcaption/*图片描述文字*/
 {
