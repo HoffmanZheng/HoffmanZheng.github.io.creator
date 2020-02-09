@@ -7,7 +7,7 @@ date: 2020-02-08T13:19:47+01:00
 draft: false
 ---
 
-HTML（Hyper Text Markup Language）超文本标记语言，是构建网站的基石。游览器通过解析 HTML 来将互联网中传输的 `字节流` 渲染成丰富多彩的可视化网页。
+HTML（Hyper Text Markup Language）超文本标记语言，是构建网站的基石。游览器通过解析 HTML 来将万维网中传输的 `字节流` 渲染成丰富多彩的可视化网页。
 
 由于我不是写前端的，就用在线 Web 调试工具 [饥人谷 JsBin](http://js.jirengu.com/?html,output) 和 [代码沙盒](https://codesandbox.io) 来进行 HTML 的编辑。更多参考资料：[MDN HTML 文档](https://developer.mozilla.org/zh-CN/docs/Web/HTML)。
 
