@@ -349,7 +349,7 @@ public class TestCountDownLatch {
 
 用于解决多线程安全问题的方式：
 
-* 同步代码块（synchronized隐式锁） 
+* 同步代码块（synchronized 隐式锁） 
 * 同步方法 
 * JDK 5 之后，同步锁（显式锁）需要通过 `lock()` 上锁，`unlock()` 释放锁 （放到 finally 中以免忘记）
 
@@ -494,21 +494,77 @@ public class ProducerConsumer {
 
 ### 8. Condition 线程通信
 
-* Condition 接口描述了可能会与锁有关联的条件变量。这些变量在用法上与使用 Object.wait 访问的隐式监视器类似，但提供了更强大的功能。需要指出的是，单个 Lock 可能与多个 Condition 对象关联。为了避免兼容性问题，Condition 方法的名称与对应的 Object 版本中的不同。
-* Condition 实例实质上被绑定到一个锁上。要为特定 Lock 实例获得 Condition 实例，请使用其 new Condition() 方法。在 Condition 对象中，与 wait、notify、notifyAll 方法对应的分别是 await、signal 和 signalAll。
-* Condition 需要和 同步锁 一起搭配使用，不可与同步代码块 / 同步方法 一起使用。
+* Condition 接口描述了可能会与锁有关联的条件变量。这些变量在用法上与使用 Object.wait 访问的隐式监视器类似，但提供了更强大的功能。需要指出的是，**单个 Lock 可能与多个 Condition 对象关联**。为了避免兼容性问题，Condition 方法的名称与对应的 Object 版本中的不同。
+* Condition 实例实质上被绑定到一个锁上。要为特定 Lock 实例获得 Condition 实例，请使用其 `new Condition()` 方法。在 Condition 对象中，与 wait、notify、notifyAll 方法对应的分别是 await、signal 和 signalAll。
+* Condition 需要和同步锁一起搭配使用，**不可与同步代码块 / 同步方法 一起使用**。
 
-### 9. 线程按序交替
+```java
+Lock lock = new ReentrantLock();
+Condition condition = lock.newCondition();
+```
 
-### 10. ReadWriteLock 读写锁
+* 使用可重入锁 + Condition 线程通信可以实现线程的按序交替。
 
-### 11. 线程八锁
+### 9. ReadWriteLock 读写锁
 
-### 12. 线程池
+也是一种乐观锁，可以多个线程同时读，但只能有一个线程在某个时刻进行写的操作。写写 / 读写的线程需要互斥，一次只能有一个；读读 不需要互斥。
 
-### 13. 线程调度
+读写锁拥有一对相关的锁：读锁和写锁。读锁可以同时被多个线程持有（只要没有 writer），而写锁只能被一个线程拥有 —— 相比独占锁提高了效率。
 
-### 14. ForkJoinPool 分支合并框架及工作窃取
+```java
+ReadWriteLock lock = new ReentrantReadWriteLock();
+lock.readlock.lock();      // 加在读操作外边。写锁同理
+lock.readlock.unlock();
+```
+
+### 10. 线程池
+
+相比频繁新建线程，线程用完就销毁的调用方法，线程池提供了一个线程队列，队列中保存着所有等待状态的线程，这样可以避免额外的系统开销，提高响应速度。
+
+![线程池的体系结构](/images/线程池体系结构.jpg)
+
+> 尽管 ThreadPoolExecutor 提供了许多可调节的参数和扩展性，程序设计者被督促使用更为方便的，为大多数通用场景预制配置的 Executors 工厂方法：`Executors.newCachedThreadPool` 有自动回收功能的无限线程池，`Executors.newFixedThreadPool` 固定数量线程池，`Executors.newSingleThreadExecutor` 一个后台线程。
+
+使用 `submit` 向线程池提交任务，使用完后 `shutdown` 关闭线程池（不关闭当前 Java 程序就无法结束），用 `Future` 接收线程池返回的结果。
+
+需要线程延迟或定时（调度）地执行任务时，可以使用 `scheduledThreadPool.schedule(Callable, int, Unit)` 。
+
+### 11. ForkJoinPool 分支合并框架及工作窃取
+
+在必要的情况下，将一个大任务，进行拆分（fork）成若干个小任务（拆到不可再拆时），再将一个个小任务的运算结果进行 join 汇总。
+
+* 工作窃取模式：可以使空闲 / 阻塞的线程从别人线程尾部偷取任务执行，避免了线程阻塞导致的后续任务的停滞，能更好的利用 CPU 的资源，效率更高。
+
+* 使用 forkJoinPool 实例调用 `invoke`（ExcursiveTask）实现。
+
+```java
+class ForkJoinSumCalculate extends ExcursiveTask<Long> {
+    private long start;
+    private long end;
+    public ForkJoinSumCalculate(long start, long end;) {
+        this.start = strat;long end;
+        this.end = end;
+    }
+    @Override
+    protected Long compute() {
+        long length = end - start;
+        if (length <= THURSHOLD) {
+            long sum = 0L;
+            for (long i = start; i <= end; i++) {
+                sun += i;
+            }
+            return sum;
+        } else {
+            long middle = (start + end) / 2;
+            ForkJoinSumCalculate left = new ForkJoinSumCalculate(start, middle);
+            left.fork();   // 拆分，同时压入线程队列
+            ForkJoinSumCalculate right = new ForkJoinSumCalculate(middle+1, end);
+            right.fork();
+            return left.join() + right.join();
+        }
+    }
+}
+```
 
 
 
