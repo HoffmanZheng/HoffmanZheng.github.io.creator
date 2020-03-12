@@ -8,7 +8,7 @@ draft: false
 ---
 
 
-本篇为 [《计算机网络自顶向下方法》](https://book.douban.com/subject/30280001/) 前两章的读书笔记，主要介绍：分层模型、HTTP 协议、非持续连接和持续连接、报文格式、cookie 与 session、Web 缓存（控制的关键字）、 FTP、DNS 流程与作用等。
+本篇为 [《计算机网络自顶向下方法》](https://book.douban.com/subject/30280001/) 前两章的读书笔记，主要介绍：网络分层模型、HTTP 协议、非持续连接和持续连接、报文格式、cookie 与 session、 FTP 协议、HTTPS 协议 等。
 
 
 
