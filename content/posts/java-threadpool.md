@@ -1,5 +1,5 @@
 ---
-title: "Java：线程池原理"
+title: "Java：线程池原理、源码分析"
 author: "Chenghao Zheng"
 tags: ["Java"]
 categories: ["Study notes"]
@@ -127,13 +127,63 @@ ThreadPoolExecutor 中 使用 `AtomicInteger ctl` 记录线程池的运行状态
 
 ### 四种常见的线程池
 
+Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到了这⼀步，如果看懂了前⾯讲的 ThreadPoolExecutor 构造⽅法中各种参数的意义，那么⼀看到 Executors 类中提供的线程池的源码就应该知道这个线程池是⼲嘛的。  
+
 #### newCachedThreadPool
+
+```java
+	public static ExecutorService newCachedThreadPool() {
+        return new ThreadPoolExecutor(0, Integer.MAX_VALUE,
+                                      60L, TimeUnit.SECONDS,
+                                      new SynchronousQueue<Runnable>());
+    }
+```
+
+当需要执⾏很多 **短时间** 的任务时，CacheThreadPool 的线程复⽤率⽐较⾼， 会显著的提⾼性能。⽽且线程 60s 后会回收，意味着即使没有任务进来，CacheThreadPool 并不会占⽤很多资源 。
 
 #### newFixedThreadPool
 
+```java
+	public static ExecutorService newFixedThreadPool(int nThreads) {
+        return new ThreadPoolExecutor(nThreads, nThreads,
+                                      0L, TimeUnit.MILLISECONDS,
+                                      new LinkedBlockingQueue<Runnable>());
+    }
+```
+
+可以看到 newFixedThreadPool 创建的都是核心线程，如果任务队列中没有任务可取，线程会一直阻塞在 getTask() 方法，而 newCachedThreadPool 会在等待 60s 后收回非核心线程。所以在没有任务的情况下 FixedThreadPool 会 **占用更多的资源**。
+
+两种线程池都⼏乎不会触发拒绝策略，但是原理不同。FixedThreadPool 是因为阻塞队列可以很⼤（最⼤为Integer最⼤值），故⼏乎不会触发拒绝策略；CachedThreadPool 是因为线程池很⼤（最⼤为Integer最⼤值），⼏乎不会导致线程数量⼤于最⼤线程数，故⼏乎不会触发拒绝策略 。
+
 #### newSingleThreadExecutor
 
+```java
+    public static ExecutorService newSingleThreadExecutor() {
+        return new FinalizableDelegatedExecutorService
+            (new ThreadPoolExecutor(1, 1,
+                                    0L, TimeUnit.MILLISECONDS,
+                                    new LinkedBlockingQueue<Runnable>()));
+    }
+```
+
+有且仅有⼀个核⼼线程，使⽤了 LinkedBlockingQueue（容量很⼤），所以，不会创建⾮核⼼线程。所有任务按照先来先执⾏的顺序执⾏。如果这个唯⼀的线程不空闲，那么新来的任务会存储在任务队列⾥等待执⾏。  
+
 #### newScheduledThreadPool
+
+```java
+    public static ScheduledExecutorService newScheduledThreadPool(int corePoolSize) {
+        return new ScheduledThreadPoolExecutor(corePoolSize);
+    }
+
+    public ScheduledThreadPoolExecutor(int corePoolSize) {
+        super(corePoolSize, Integer.MAX_VALUE, 0, NANOSECONDS,
+              new DelayedWorkQueue());
+    }
+```
+
+⼀个定⻓线程池，⽀持定时及周期性任务执⾏。  
+
+四种常⻅的线程池基本够我们使⽤了，但是《阿⾥把把开发⼿册》**不建议** 我们直接使⽤ Executors 类中的线程池，⽽是通过 ThreadPoolExecutor 的⽅式，这样的处理⽅式让写的同学需要更加明确线程池的运⾏规则，规避资源耗尽的⻛险。
 
 ### 线程池主要的任务处理流程
 
@@ -301,7 +351,7 @@ private boolean addWorker(Runnable firstTask, boolean core) {
                     } finally {
                         afterExecute(task, thrown);      // 执行 afterExecute
                     }
-                } finally {
+                } finally { n
                     task = null;
                     w.completedTasks++;
                     w.unlock();   // 解锁 Worker
@@ -365,7 +415,7 @@ private boolean addWorker(Runnable firstTask, boolean core) {
     }
 ```
 
+核⼼线程的会 **⼀直** 卡在 workQueue.take() ⽅法，被阻塞并挂起，不会占⽤ CPU 资源，直到拿到 Runnable 然后返回（当然如果 allowCoreThreadTimeOut 设置为 true，那么核⼼线程就会去调⽤ poll ⽅法，因为 poll 可能会返回 null，所以这时候核⼼线程满⾜超时条件也会被销毁）。  
 
-
-
+⾮核⼼线程会 workQueue.poll(keepAliveTime, TimeUnit.NANOSECONDS) ，如果超时还没有拿到，下⼀次循环判断 compareAndDecrementWorkerCount 就会返回 true，导致 getTask() 返回 null，Worker 对象的 run() ⽅法循环体的判断为 null，就会执行 `processWorkerExit(w, completedAbruptly)` 线程被系统回收。
 
