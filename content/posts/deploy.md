@@ -7,8 +7,6 @@ date: 2020-04-21T11:30:47+01:00
 draft: false
 ---
 
-
-
 本篇介绍 Java 程序部署的三种方式：exec 插件、jar 包、Docker 方式部署，以及使用 Nginx 实现简单的负载均衡。
 
 # Java 程序的部署
