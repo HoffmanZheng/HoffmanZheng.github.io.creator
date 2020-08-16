@@ -48,7 +48,7 @@ Expires：Sat，25 Feb 2012 12:22:17 GMT，超过这个时间值后，缓存的�
 
 Last-Modified 一般用于表示一个服务器上的资源的最后修改时间，通过这个最后修改时间可以判断当前请求的资源是否是最新的。
 
-一般服务端在响应头返回一个 Last-Modified：Sat，25 Feb 2012 12:55:04 GMT，游览器再次请求时就增加一个 If-Modified-Since：Sat，25 Feb 2012 12:55:04 GMT 字段，询问当前请求的资源是否是最新的，如果是最新的就返回 304 Not Modified 状态码，告诉游览器是最新的，服务器也不会传输新的数据。
+一般服务端在响应头返回一个 Last-Modified：Sat，25 Feb 2012 12:55:04 GMT，游览器再次请求时就增加一个 `If-Modified-Since：Sat，25 Feb 2012 12:55:04 GMT` 字段，询问当前请求的资源是否是最新的，如果是最新的就返回 304 Not Modified 状态码，告诉游览器是最新的，服务器也不会传输新的数据。
 
 Etag 字段让服务器给每个页面分配一个唯一的编号，通过编号区分当前页面是否是最新的，比 Last-Modified 更加灵活，但是在后端的 Web 服务器有多台时难以处理，因为每个 Web 服务器都要记住网站的所有资源，否则游览器返回这个编号就没有意义了。
 
@@ -60,9 +60,38 @@ Cache-Control 与 Expires 都属于强缓存，在缓存时间内不会向服务
 
 # DNS 域名解析
 
+我们通常使用 URL 域名来请求网络资源，它需要被解析成 IP 地址才能与远程主机建立连接，如何将域名解析成 IP 地址就属于 DNS 解析的工作范畴了。
 
+> 对 URL 域名仍不了解的同学可以先阅读下：[Web：浅析 URL](https://chenghao.monster/2020/web-url/)
+
+#### 域名缓存
+
+当用户在游览器中输入域名并按下回车键后，游览器会先检查缓存中有没有这个域名对应的解析过的 IP 地址，如果没有命中，则会去操作系统的缓存中查找是否有这个域名对应的 DNS 解析结果。用户也可以修改系统文件来修改域名对应的 IP，Windows 下为 `C:\\Windows\System32\drivers\etc\hosts`，Linux 下为 `/etc/hosts`，**域名劫持** 就是黑客修改把特定的域名解析到它指定的 IP 地址上，所以 Windows 7 中将 hosts 设置成了只读，防止这个文件被轻易修改。
+
+本机的域名缓存 Windows 下可通过 `ipconfig /flushdns` Linux 下 `/etc/init.d/nscd restart` 来清除缓存，JVM 也会在 `InetAddress` 类中缓存 DNS 解析结果。
+
+#### 域名解析
+
+如果在本机中仍然无法完成域名的解析，就会真正请求域名服务器。
+
+![](/images/DNS解析.jpg)
+
+1. 首先会去请求本地区的域名服务器 LDNS，即本地区的互联网应用服务商电信或者联通，它们的域名解析服务器性能都很好，会缓存域名解析结果，80% 的域名解析请求到 LDNS 就结束了，所以 LDNS 承担了主要的域名解析工作。
+2. 如果 LDNS 没有命中，则会依次去请求 Root Server、gTLD Server，顶级域名服务器会查找并将此域名对应的 Name Server 地址返回给 LDNS。Name Server 就是域名注册时的某个域名服务提供商。
+3. LDNS 再向 Name Server 发起请求，Name Server 会查询存储的域名和 IP 的映射关系表，连同一个 TTL 值一起返回给 LDNS，LDNS 会缓存这个域名和 IP 的对应关系，缓存时间由 TTL 值控制。
+4. 最后，LDNS 将解析结果返回给用户，用户根据 TTL 值缓存在本地系统缓存中，域名解析过程结束。
+
+#### 跟踪域名解析过程
+
+Windows 和 Linux 下都可以使用 `nslookup` 来查询域名的解析结果，Linux 下可用 `dig` 查询 DNS 的解析过程。
+
+![](/images/digDNS.png)
+
+CNAME 为 Canonical Name（别名解析），可以为一个域名设置一个或者多个别名（方便 CDN 配置）。A 为 Address 为域名对应的 IP 地址。
 
 # CDN 工作机制
 
+CDN 全称 Content Delivery Network，它将网站的内容发布到最接近用户的网络“边缘”，使用户可以 **就近** 取得所需的内容，提高用户访问网站的响应速度。
 
+CDN 主要缓存网站中的静态数据，如 CSS、JS、图片和静态页面等数据，
 
