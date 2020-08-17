@@ -87,7 +87,7 @@ Windows 和 Linux 下都可以使用 `nslookup` 来查询域名的解析结果�
 
 ![](/images/digDNS.png)
 
-CNAME 为 Canonical Name（别名解析），可以为一个域名设置一个或者多个别名（方便 CDN 配置）。A 为 Address 为域名对应的 IP 地址。
+`CNAME` 为 Canonical Name（别名解析），可以为一个域名设置一个或者多个别名（方便 CDN 配置）。A 为 Address 为域名对应的 IP 地址。
 
 # CDN 工作机制
 
@@ -95,3 +95,8 @@ CDN 全称 Content Delivery Network，它将网站的内容发布到最接近用
 
 CDN 主要缓存网站中的静态数据，如 CSS、JS、图片和静态页面等数据，
 
+![](/images/CDN.jpg)
+
+CDN 架构下，当用户发起请求，经迭代解析后 LDNS 将收到域名的注册服务器地址，而公司的 DNS 解析服务器会把它重新 CNAME 到 CDN 全局中的 DNS 负载均衡服务器，再由 GTM 根据是哪个地方的访问用户来分配离这个用户最近的 CDN 节点。
+
+如果 CDN 节点中的请求数据不存在，则会回到源站去获取这个文件，然后再返回给用户。
