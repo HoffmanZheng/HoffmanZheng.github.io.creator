@@ -9,7 +9,7 @@ draft: false
 
 I/O 是任何编程语言都无法回避的问题，它是人机交互中机器获取和交换信息的主要渠道，可以说大部分 Web 应用系统的瓶颈都是 I/O 瓶颈。
 
-本篇以 [《深入分析 Java Web 技术内幕》](https://book.douban.com/subject/25953851/) 第二章 深入分析 Java I/O 的工作机制 的内容为参考，此篇讲解 Java I/O 类库、磁盘 I/O、网络 I/O、NIO 等。
+本篇以 [《深入分析 Java Web 技术内幕》](https://book.douban.com/subject/25953851/) 第二章 深入分析 Java I/O 的工作机制 的内容为参考，此篇讲解 Java I/O 类库、磁盘 I/O、网络 I/O、NIO 工作机制等。
 
 ### Java I/O 类库的基本架构
 
@@ -140,9 +140,7 @@ public FileInputStream(File file) throws FileNotFoundException {
 
 虽然我们可以采用一个客户端对应一个处理线程的方式，让出现阻塞的线程不影响其他线程的工作，加以使用线程池来减少线程创建和回收的成本，但仍有一些使用场景无法适用，比如服务器需要同时保持大量的 HTTP 长连接，或是想给某些客户端更高的优先级。为此我们需要一种新的 I/O 操作方式。
 
-#### NIO 的工作机制
-
-JDK 1.4 引入的 `java.nio` 包便采用了新的非阻塞的 I/O 操作方式，实际上 `java.io` 也已经被 NIO 重新实现过，即使我们不显式地使用 NIO 编程，也能从中受益。
+JDK 1.4 引入的 `java.nio` 包采用了新的非阻塞的 I/O 操作方式，实际上 `java.io` 也已经被 NIO 重新实现过，即使我们不显式地使用 NIO 编程，也能从中受益。
 
 | BIO                       | NIO                           |
 | ------------------------- | ----------------------------- |
@@ -152,6 +150,151 @@ JDK 1.4 引入的 `java.nio` 包便采用了新的非阻塞的 I/O 操作方式�
 
 BIO 是面向流，一次一个字节地处理数据；而 NIO 则面向块（缓冲区），以块的形式处理数据。NIO 主要由三个核心部分组成：Buffer 缓冲区、Channel 管道、Selector 选择器。
 
+#### Buffer 的工作方式
 
-### 适配器模式与装饰器模式
+Buffer 缓冲区作为 NIO 中直接与数据交互的部分，底层是一个数组结构，它通过几个成员变量来记录当前缓存的数据状态：
+
+| 索引     | 说明                                 |
+| -------- | ------------------------------------ |
+| capacity | 缓冲区数组总长度                     |
+| position | 下一个要操作的数据元素的位置         |
+| limit    | 缓冲区数组不可操作的下一个元素的位置 |
+| mark     | 备忘位置，与 reset() 联合使用   |
+
+ByteBuffer 常用 API 如下：
+
+```java
+ByteBuffer byteBuffer = ByteBuffer.allocate(10);
+System.out.println("初始化一个长度为 10 的 Buffer: " + byteBuffer.toString());
+
+byteBuffer.put(new byte[]{2, 3, 3});
+System.out.println("往缓冲区写入三个字节: " + byteBuffer.toString());
+
+byteBuffer.flip();
+System.out.println("切换到读模式: " + byteBuffer.toString());
+
+byte[] bytes = new byte[3];
+System.out.println("读取前结果集数据: " + Arrays.toString(bytes));
+byteBuffer.get(bytes, 0, 3);
+// 读取的时候，length 最大可为 limit，不然会抛出 java.nio.BufferUnderflowException
+System.out.println(byteBuffer.toString());
+System.out.println("读取后结果集数据: " + Arrays.toString(bytes));
+```
+
+输出结果如下：
+
+```shell
+初始化一个长度为 10 的 Buffer: java.nio.HeapByteBuffer[pos=0 lim=10 cap=10]
+往缓冲区写入三个字节: java.nio.HeapByteBuffer[pos=3 lim=10 cap=10]
+切换到读模式: java.nio.HeapByteBuffer[pos=0 lim=3 cap=10]
+读取前结果集数据: [0, 0, 0]
+java.nio.HeapByteBuffer[pos=3 lim=3 cap=10]
+读取后结果集数据: [2, 3, 3]
+```
+
+在写模式下 limit 等于 capacity，表示最后能够写多少个字节的数据，使用 `flip()` 切换到读模式后， limit 代表最多能够读到多少数据，所以 flip 之后 limit 会被设置成写模式下的 position 值。如果读取超出 limit 的数据则会抛出 `java.nio.BufferUnderflowException`。
+
+```java
+public final Buffer flip() {
+        limit = position;
+        position = 0;
+        mark = -1;
+        return this;
+    }
+```
+
+当想进行下一次写入时，调用 `clear()` 再次切换成写模式，然后重置 position、limit、mark 值，这样不会擦除缓冲数组中的数据，而是将数据 “遗忘”，准备好再次写入。
+
+如果 Buffer 中仍有未读的数据，且后续还需要这些数据，但是此时想要先先写些数据，那么使用 `compact()` 方法，compact 将所有 **未读的数据拷贝到 Buffer 起始处**，然后将 position设置到最后一个未读元素后面，limit 设置为 capacity，之后就可以写数据了，不会覆盖未读的数据。
+
+```java
+public final Buffer clear() {
+        position = 0;
+        limit = capacity;
+        mark = -1;
+        return this;
+    }
+
+public ByteBuffer compact() {
+        System.arraycopy(hb, ix(position()), hb, ix(0), remaining());
+        position(remaining());
+        limit(capacity());
+        discardMark();
+        return this;
+    }
+```
+
+mark() 与 reset() 组合使用，mark 用来标记当前下次操作的 position 位置，reset 会将 mark 值重新赋给 position。
+
+```java
+public final Buffer mark() {
+        mark = position;
+        return this;
+    }
+
+// Resets this buffer's position to the previously-marked position.
+public final Buffer reset() {
+        int m = mark;
+        if (m < 0)
+            throw new InvalidMarkException();
+        position = m;
+        return this;
+    }
+```
+
+从操作系统缓冲区复制数据到用户缓冲区比较耗性能，Buffer 提供了以 **内存映射** 的访问方式，即 `ByteBuffer.allocateDirect(int capacity)`，这个方法返回的 DirectByteBuffer 就是与底层空间关联的缓冲区，通过 Native 代码操作非 JVM 堆的内存空间。每次创建和回收的内存开销都比较大，适合数据量比较大、生命周期比较长的情况。
+
+#### NIO 的工作机制
+
+NIO 作为非阻塞的 I/O 方式其实是在网络层次中理解的，对于 FileChannel 来说一样是阻塞的。NIO 采用了 **多路复用的 I/O 模型**，一个进程可以同时等待多个文件描述符，而这些文件描述符其中的任意一个进入读就绪状态，select 函数就可以返回。
+
+![](/images/nio.png)
+
+Selector 就是一个 I/O 调度系统，它负责监控每个 Channel 的当前运行状态（需提前注册），当 Channel 中有数据时，就把数据分配到对应的 Buffer 中，我们可以控制 Buffer 的容量及扩容机制，典型的 NIO 代码如下：
+
+```java
+public void select() throws IOException {
+    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    Selector selector = Selector.open();
+    ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
+    serverSocketChannel.configureBlocking(false);  // 非阻塞模式
+    serverSocketChannel.socket().bind(new InetSocketAddress(8080));
+    // 把通信信道注册到选择器上
+    serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
+    while (true) {
+        // 检查注册在这个选择器上的所有通信信道是否有事件发生
+        Set selectedKeys = selector.selectedKeys();  // 获取所有的 key
+        Iterator iterator = selectedKeys.iterator();
+        while (iterator.hasNext()) {
+            SelectionKey selectionKey = (SelectionKey) iterator.next();
+            // 监听客户端的连接请求
+            if ((selectionKey.readyOps() & SelectionKey.OP_ACCEPT) 
+                == SelectionKey.OP_ACCEPT) {
+                // 获取通信通道对象
+                ServerSocketChannel ssc = (ServerSocketChannel) selectionKey.channel();  
+                SocketChannel sc = ssc.accept();  // 接收请求
+                sc.configureBlocking(false);
+                // 设置该 channel 为读就绪状态
+                sc.register(selector, SelectionKey.OP_READ);
+                iterator.remove();
+                // 处理请求：从读就绪状态的 channel 中读取数据写入 buffer
+            } else if ((selectionKey.readyOps() & SelectionKey.OP_READ) 
+                       == SelectionKey.OP_READ) {
+                SocketChannel sc = (SocketChannel) selectionKey.channel();
+                while (true) {
+                    buffer.clear();
+                    int n = sc.read(buffer); 
+                    if (n <= 0) {
+                        break;
+                    }
+                    buffer.flip();
+                }
+                iterator.remove();
+            }
+        }
+    }
+}
+```
+
+虽然上述代码把监听请求和处理请求的事件放在同一个线程中，但通常 Web 服务器像 Tomcat 和 Jetty 都是它们放在 **两个线程** 中，一个线程专门以阻塞的方式监听客户端的连接请求，另一个线程真正采用 NIO 的方式负责处理请求，因此每个连接的数据交互都不是阻塞方式。
 
