@@ -9,7 +9,7 @@ draft: false
 
 I/O 是任何编程语言都无法回避的问题，它是人机交互中机器获取和交换信息的主要渠道，可以说大部分 Web 应用系统的瓶颈都是 I/O 瓶颈。
 
-本篇以 [《深入分析 Java Web 技术内幕》](https://book.douban.com/subject/25953851/) 第二章 深入分析 Java I/O 的工作机制 的内容为参考，此篇讲解 Java I/O 类库、磁盘 I/O、网络 I/O、NIO 工作机制等。
+本篇以 [《深入分析 Java Web 技术内幕》](https://book.douban.com/subject/25953851/) 第二章 深入分析 Java I/O 的工作机制 的内容为参考，讲解 Java I/O 类库、磁盘 I/O、网络 I/O、NIO 工作机制等。
 
 ### Java I/O 类库的基本架构
 
@@ -36,7 +36,7 @@ OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(new Fi
 
 #### 字节与字符的转化接口
 
-字符在写入文件持久化或者网络传输之前，都需要先经过编码转换，下图中 InputStreamReader 就是从字节到字符的转化桥梁，在初始化时需要指定编码字符集，否则会采用操作系统默认的字符集，很可能出现乱码问题。
+字符在写入文件持久化或者网络传输之前，都需要先经过编码转换，下图中 InputStreamReader 就是从字节到字符的转化桥梁，在初始化时需要指定编码字符集，否则会采用操作系统默认的字符集，很可能出现乱码问题。具体的编码解码过程可以查看：[三：深入分析 Java Web 中的中文编码问题](https://chenghao.monster/2020/java-encode/)
 
 ![](/images/Charset.png)
 
