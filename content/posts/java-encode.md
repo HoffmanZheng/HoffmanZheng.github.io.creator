@@ -37,11 +37,11 @@ ASCⅡ 码的 128 个字符显然是不够用的，ISO 组织在 ASCⅡ 码基�
 
 #### UTF-16
 
-双字节定长的 UniCode 统一码，世界上所有的语言都可以通过 UniCode 来编码。UTF-16 表示字符非常方便，每两个字节表示一个字符，**大大简化了字符串操作**，所以 Java 采用 UTF-16 作为内存的字符存储格式。
+双字节定长的 UniCode 统一码，世界上所有的语言都可以通过 UniCode 来编码。UTF-16 表示字符非常方便，每两个字节表示一个字符，**大大简化了字符串操作**，编码效率较高，适合在本地磁盘和内存之间使用（但不适合在网络之间传输，网络传输损坏字节流后很难恢复），所以 Java 采用 UTF-16 作为内存的字符存储格式，即一个 char 占两个字节 16 bits。
 
 #### UTF-8
 
-UTF-16 统一采用两个字节来表示一个字符，虽然简单方便，但很大一部分字符一个字节就足够表示了现在却要用两个字节表示，对 **存储空间和网络带宽** 都不是很友好；而 UTF-8 采用 **变长技术**，每个编码区域有不同的字码长度（1~6 个字节）。
+UTF-16 统一采用两个字节来表示一个字符，虽然简单方便，但很大一部分字符一个字节就足够表示了现在却要用两个字节表示，对 **存储空间和网络带宽** 都不是很友好；而 UTF-8 采用 **变长技术**，每个编码区域有不同的字码长度（1~6 个字节），相比 UTF-8 更适合网络传输，单个字节损坏也不会影响后面的其他字符，在编码效率上介于 GBK 和 UTF-8 之间。
 
 ### Java 中的编解码
 
@@ -53,11 +53,102 @@ UTF-16 统一采用两个字节来表示一个字符，虽然简单方便，但�
 
 除了 I/O 过程涉及编码外，Java 也提供了在内存中字符和字节之间的相互转换接口，如 `string.getBytes(charset)` 和 `charset.encode(string);charset.decode(byteBuffer)`，可以通过 `Charset.forName("UTF-8")` 来获取指定的编码字符集，只要我们设置的编码格式统一，一般都不会出现问题。
 
-#### Java 中的编解码流程
+以 `string.getBytes(charset)` 为例，Java 实现编码的流程如下：
 
-以 `string.getBytes()` 为例
+![](/images/CharsetEncoder.png)
 
 ### 在 Java Web 中涉及的编解码
 
-### 常见问题分析
+在以字节为单位的网络传输中，请求方需要先将请求内容编码成字节流才能发送，服务器也需要将收到的字节流解码才能正常地处理请求。在一个 HTTP 请求中，需要编码的地方有：URL、Cookie、POST 表单、响应体
 
+![](/images/web中的编码.jpg)
+
+#### URL 的编解码
+
+当在百度中搜索 "技术内幕" 时，我们得到的 URL 是这样的：`https://www.baidu.com/s?ie=UTF-8&wd=%E6%8A%80%E6%9C%AF%E5%86%85%E5%B9%95`，显然游览器对其中的中文字符进行了 UTF-8 编码，并以十六进制表示了出来。
+
+```java
+String string = "技术内幕";
+byte[] utf = string.getBytes("UTF-8");
+StringBuilder sb = new StringBuilder();
+for (byte b : utf) {
+     sb.append(String.format("%02X", b));
+}
+System.out.println(sb.toString());
+// prints:  E68A80E69CAFE58685E5B995
+```
+
+查阅 [URL 编码规范 RFC 3986](https://datatracker.ietf.org/doc/rfc3986/) 可知，游览器编码 URL 是将 **非 ASCⅡ 字符** 按照某种编码格式编码成百分号加十六进制表示的字节 `percent-encoded octets` ，不同游览器对 PathInfo 和 QueryString 的编码是不一样的，那服务器如 Tomcat 又是如何对接收到的 URL 进行解码的呢。
+
+对 URL 的 URI 部分的解码的过程是在 `org.apache.catalina.connector.CoyoteAdapter` 中的 `convertURI` 方法中完成的，它会使用 `<Connector URIEncoding="UTF-8" />` 中定义的编码格式进行解析，如果没有定义则将以默认编码 ISO-8859-1 解析。
+
+对 QueryString 以及 POST 请求中的表单参数，都是通过 `org.apache.catalina.connector.Request` 中的 `request.getParameter` 获取参数值，对它们的解码是在这个方法第一次被调用时，会调用 parseParameters 这个方法。
+
+对 QueryString 的解码，会先去获取 Connector 中的 **useBodyEncodingForURI** 参数，如果为 true，就会使用 Header 中 ContentType 定义的 Charset 进行解码，否则就使用默认的 ISO-8859-1。
+
+可以看到，对于 URL 的编码和解码并不是我们在应用程序中能完全控制，所以我们应该尽量在 URL 中使用非 ASCⅡ 码字符，并且在服务器端设置 `<Connector URIEncoding="UTF-8" useBodyEncodingForURI="true">` ，不然就很可能会碰到乱码问题。
+
+#### HTTP Header 的编解码
+
+除了上述的 URL 信息，一个 HTTP 请求还可能在 Header 中传递其他参数，如 Cookie、redirectPath 等，对 Header 信息的解码也是在调用 request.getHeader 时进行的，会在 MessageBytes 中的 toString() 方法中完成 byte 到 char 的转化，使用的是 ISO-8859-1 解码格式，我们也不能设置 Header 的其他解码格式，所以 **如果在 Header 中有非 ASCⅡ 码字符，解码中肯定会有乱码**。
+
+#### POST 表单的编解码
+
+POST 表单提交的参数是通过 HTTP BODY 传递到服务端的，它会先在游览器上根据 ContentType 的 Charset 编码格式进行编码，到服务器端也是用 ContentType 中的字符集进行解码的，所以 POST 表单提交的参数 **一般不会出现乱码** 问题。
+
+此外这个字符集也可以通过 request.setCharacterEncoding(charset) 来设置，但是要在第一次调用 request.getParameter 方法之前就设置，如果项目中使用了 Filter，Filter 可能会提前调用 request.getParameter 出现不可预料的乱码问题。
+
+### 常见编解码问题分析
+
+#### 中文变成西欧字符
+
+例如字符串 “技术内幕” 变成了 “¼¼ÊõÄÚÄ»”，中文字符变成了奇怪的西欧字符，且是一个汉字字符变成两个乱码字符，用代码复现其编码解码过程如下：
+
+```java
+    String string = "技术内幕";
+    char[] chars = string.toCharArray();
+    for (char cha : chars) {
+        System.out.print(Integer.toHexString(cha) + " ");
+    }
+    System.out.println(" ");
+
+    byte[] gbk = string.getBytes("GBK");   // GBK 编码
+    StringBuilder sb = new StringBuilder();
+    for (byte b : gbk) {
+        sb.append(String.format("%02X", b));
+        sb.append(" ");
+    }
+    System.out.println(sb.toString());
+
+    String result = new String(gbk, "ISO-8859-1");   // ISO-8859-1 解码
+    System.out.println(result);
+
+    // 输出的结果为：
+    // 6280 672f 5185 5e55  
+    // BC BC CA F5 C4 DA C4 BB 
+    // ¼¼ÊõÄÚÄ»
+```
+
+编码与解码过程如下：
+
+![](/images/encode.png)
+
+#### 一个汉字变成一个问号
+
+中文字符经过 ISO-8859-1 编解码后，所有字符都变成了问号，这是因为 ISO-8859-1 进行编解码时，对不在码值范围内的字符会统一用 3F 表示，即 ISO-8859-1 会把不认识的字符都变成问号。
+
+![](/images/encode2.png)
+
+中文字符经过 ISO-8859-1 编码会丢失信息，通常我们称之为 "**黑洞**"。由于现在大部分基础的 Java 框架或系统默认的字符集都是 ISO-8859-1，所以很容易出现乱码问题。
+
+#### 一个汉字变成两个问号
+
+有的时候一个中文字符会变成两个问号，这种情况比较复杂，可能会涉及多次编解码的过程，这时要仔细查看每一步的编解码环节，找出错误的地方。比如下图这种情况：
+
+![](/images/encode3.png)
+
+调试后发现，GBK 的编码委托给了 DoubleByte 类的 encodeChar 方法执行，成员变量 c2b 即是 GBK 的码表，观察发现，GBK 的编码格式是 **不支持非 ASCⅡ 码的西欧字符** 的，GBK 在对不认识的字符编码的时候会将其替换成 63 (3F) ，对应 ASCⅡ 码表中的问号。
+
+![](/images/encode4.png)
+
+![](/images/encode5.png)
