@@ -155,15 +155,146 @@ TokenKind lookupKind(Name name) {
 | pos  | 存储语法节点在源代码中的起始位置              |
 | type | 表明这个节点的 Java 类型，如 int float String |
 
-在 package 的词法分析中有这么一行 `JCExpression t = toP(F.at(token.pos).Ident(ident()));` 它会调用 TreeMarker 
-
-每个语法树上的节点都是 JCTree 的一个实例（内部类），
+每个语法树上的节点都是  JCTree 的一个实例（内部类），他们都会实现一个接口 xxxTree，实现类又都是 JCTree 的子类，同时又是它的内部类。
 
 ![](/images/JCTree.png)
 
+在 package 的词法分析中有这么一行 `JCExpression t = toP(F.at(token.pos).Ident(ident()));` 它会调用 TreeMarker 根据 Name 来构建一个 JCIdent 对象。
+
+以 JavacParser 中的 importDeclaration() 为例看下语法树的构建过程：
+
+```java
+/** ImportDeclaration = IMPORT [ STATIC ] Ident { "." Ident } [ "." "*" ] ";"
+     */
+    JCTree importDeclaration() {
+        int pos = token.pos;
+        nextToken();
+        boolean importStatic = false;
+        if (token.kind == STATIC) {   //  检查是否有 static 关键词
+            checkStaticImports();
+            importStatic = true;
+            nextToken();
+        }
+        JCExpression pid = toP(F.at(token.pos).Ident(ident()));
+        do {
+            int pos1 = token.pos;
+            accept(DOT);
+            if (token.kind == STAR) {  // 如果最后一个 Token 是 *，则命名 Token 为 asterisk
+                pid = to(F.at(pos1).Select(pid, names.asterisk));
+                nextToken();
+                break;
+            } else {
+                pid = toP(F.at(pos1).Select(pid, ident()));
+            }
+        } while (token.kind == DOT);
+        accept(SEMI);    // ; import 解析完成
+        return toP(F.at(pos).Import(pid, importStatic));
+    }
+```
+
+如果是多级目录，则继续读取下一个 Token 并构造 JCFieldAccess 节点。所有的语法节点的生成都是在 `TreeMaker` 类中完成的，TreeMaker 实现了再 JCTree.Factory 接口定义的所有节点的构成方法。对一个类形成的抽象语法树大概是下图这个样子：
+
+![](/images/抽象语法树.jpg)
+
 ### 语义分析过程
 
-### 代码生成过程
+经过语法分析器生成的抽象语法树还是太 **粗糙** 了，离目标 Java 字节码还有点差距，语义分析过程就是在这个语法树上进一步做一些处理，主要有：
+
+| 源码类                                                    | 语义分析功能         |
+| --------------------------------------------------------- | ---------------------- |
+| com.sun.tools.javqac.comp.Enter                           | 给类添加默认的构造函数 |
+| com.sun.tools.javac.processing.JavacProcessingEnvironment | 处理注解               |
+| com.sun.tools.javac.comp.Attr                             | 检查语义的合法性：<br /> 1. 变量的类型是否匹配<br /> 2. 变量在使用前时候已经初始化<br /> 3. 字符串常量的合并 |
+| com.sun.tools.javac.comp.Check | 检查语法树中的变量类型是否正确，方法返回的类型是否与接收的引用值类型匹配 |
+| com.sun.tools.javac.comp.Flow | 完成数据流分析<br /> 1. 检查变量在使用前时候都已经被正确赋值<br /> 2. 保证 final 修饰的变量不会被重复赋值<br /> 3. 确定方法的返回值类型，检查接收方法返回值的引用类型是否匹配<br /> 4. 检查受检异常是否已经捕获或抛出<br /> 5. 检查 return 后面是否仍有可执行语句 |
+|  | 消除一些无用的代码：<br /> 1. 去除永不真的条件判断<br /> 2. 解除一些语法糖，如将 foreach 解析成标准的 for 循环形式、Assert 语法转化成 if 判断等<br /> 3. 装箱拆箱的自动转换 |
 
 ### Class 文件结构
 
+经过语义分析器完成的语法树已经非常完善了，接下来 Javac 会调用 com.sun.tools.javac.jvm.Gen 类遍历语法树，生成最终的 Java 字节码。
+
+通过 Github上的 [programming-for-the-jvm](https://github.com/ymasory/programming-for-the-jvm)，运行 `COM.sootNsmoke.oolong.Gnoloo` 类，参数为需要转化的 class 文件路径，就可以将我们编译出的二进制 class 文件先转化成能够理解的汇编语言 Oolong，在当前目录下生成一个 ClassName.j 文件，如下所示：
+
+![](/images/oolong.png)
+
+还可以通过 JDK 自带的 Javap 来生成 class 文件格式：`javap -verbose +class 文件路径` ，生成的 class 结构如下：
+
+```shell
+Classfile /C:/Users/zch69/recipes/temp/programming-for-the-jvm-master/target/classes/COM/sootNsmoke/ClassFileStructure.class
+  Last modified 2020-9-22; size 588 bytes
+  MD5 checksum 61944717f8416e375dc796bcf2c47b72
+  Compiled from "ClassFileStructure.java"
+public class COM.sootNsmoke.ClassFileStructure
+  minor version: 0
+  major version: 52
+  flags: ACC_PUBLIC, ACC_SUPER
+Constant pool:
+   #1 = Methodref          #6.#20         // java/lang/Object."<init>":()V
+   #2 = Fieldref           #21.#22        // java/lang/System.out:Ljava/io/PrintStream;
+   #3 = String             #23            // hello world!
+   #4 = Methodref          #24.#25        // java/io/PrintStream.println:(Ljava/lang/String;)V
+   #5 = Class              #26            // COM/sootNsmoke/ClassFileStructure
+   #6 = Class              #27            // java/lang/Object
+   #7 = Utf8               <init>
+   #8 = Utf8               ()V
+   #9 = Utf8               Code
+  #10 = Utf8               LineNumberTable
+  #11 = Utf8               LocalVariableTable
+  #12 = Utf8               this
+  #13 = Utf8               LCOM/sootNsmoke/ClassFileStructure;
+  #14 = Utf8               main
+  #15 = Utf8               ([Ljava/lang/String;)V
+  #16 = Utf8               args
+  #17 = Utf8               [Ljava/lang/String;
+  #18 = Utf8               SourceFile
+  #19 = Utf8               ClassFileStructure.java
+  #20 = NameAndType        #7:#8          // "<init>":()V
+  #21 = Class              #28            // java/lang/System
+  #22 = NameAndType        #29:#30        // out:Ljava/io/PrintStream;
+  #23 = Utf8               hello world!
+  #24 = Class              #31            // java/io/PrintStream
+  #25 = NameAndType        #32:#33        // println:(Ljava/lang/String;)V
+  #26 = Utf8               COM/sootNsmoke/ClassFileStructure
+  #27 = Utf8               java/lang/Object
+  #28 = Utf8               java/lang/System
+  #29 = Utf8               out
+  #30 = Utf8               Ljava/io/PrintStream;
+  #31 = Utf8               java/io/PrintStream
+  #32 = Utf8               println
+  #33 = Utf8               (Ljava/lang/String;)V
+{
+  public COM.sootNsmoke.ClassFileStructure();
+    descriptor: ()V
+    flags: ACC_PUBLIC
+    Code:
+      stack=1, locals=1, args_size=1
+         0: aload_0
+         1: invokespecial #1                  // Method java/lang/Object."<init>":()V
+         4: return
+      LineNumberTable:
+        line 3: 0
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       5     0  this   LCOM/sootNsmoke/ClassFileStructure;
+
+  public static void main(java.lang.String[]);
+    descriptor: ([Ljava/lang/String;)V
+    flags: ACC_PUBLIC, ACC_STATIC
+    Code:
+      stack=2, locals=1, args_size=1
+         0: getstatic     #2                  // Field java/lang/System.out:Ljava/io/PrintStream;
+         3: ldc           #3                  // String hello world!
+         5: invokevirtual #4                  // Method java/io/PrintStream.println:(Ljava/lang/String;)V
+         8: return
+      LineNumberTable:
+        line 5: 0
+        line 6: 8
+      LocalVariableTable:
+        Start  Length  Slot  Name   Signature
+            0       9     0  args   [Ljava/lang/String;
+}
+SourceFile: "ClassFileStructure.java"
+
+```
+
+具体的 jvm 指令可以参考 [oracle:Java Language and Virtual Machine Specifications](https://docs.oracle.com/javase/specs/index.html) 或者 [《深入理解 Java 虚拟机》](https://book.douban.com/subject/34907497/)，在此不做讲解。
