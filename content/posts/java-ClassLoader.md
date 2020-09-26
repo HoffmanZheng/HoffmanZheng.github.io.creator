@@ -1,0 +1,102 @@
+---
+title: "五：深入分析 ClassLoader 工作机制"
+author: "Chenghao Zheng"
+tags: ["Java"]
+categories: ["Reading notes"]
+date: 2020-09-22T09:19:47+01:00
+draft: false
+---
+
+Java 是个强类型的编程语言，一个变量的类型在编译时就已经决定了，就是最初声明它的类型， 如果想把它当成另一个类型来使用，需要先经过显式的类型转换，转换时可能会因为类型不符而抛出 `ClassCastException`。
+
+本篇以 [《深入分析 Java Web 技术内幕》](https://book.douban.com/subject/25953851/) 第六章 深入分析 ClassLoader 工作机制 的内容为参考，讲解 Java 中的类型，类加载机制，常见的 ClassLoader，类加载错误分析 等。
+
+### Java 中的类型
+
+如开篇所说，一个 Java 对象的类型在声明的时候就被确定了，但 Java 是面对对象的语言，有丰富的接口和抽象类，一个对象被传来传去的时候，可能就丢失了它的一些类型信息，但 Java 也像 C++ 那样是拥有 RTTI (Run-Time Type Identification) **运行时类型识别** 特性的语言。在任何时刻，任何一个对象都清楚地知道自己的具体类型（可以通过反射来拿到）。 
+
+不知道大家有没有想过，Java 中的对象是如何被创造出来的，创造时是否又遵循了一个怎样的规则。其实 Java 中的对象都是根据各自的说明书构建出来的，这个说明书信息就在 [四：Javac 编译原理与 class 文件结构](https://chenghao.monster/2020/java-compile/) 中生成的类的 class 字节码文件之中，这些字节码文件又被存储在永久代 (Permenent Generation Java 7 之前) / 元空间 (MetaSpace Java 8 之后)。
+
+当需要创建一个对象时，就会将这个创建任务委托给类加载器来完成，类加载器会找到指定的 class 字节码文件，根据说明书来装配出一个需要的对象。因此任何一个 Java 对象，都可以通过 `getClass() / instanceof` 来获取自己的具体类型。 
+
+### ClassLoader 类加载器
+
+类加载器 ClassLoader 在 JDK 源码中的 rt.jar (rt 即 runtime) 这个包中，先看下这个类都有哪几个主要的方法：
+
+| 方法                          | 主要作用                                 |
+| ----------------------------- | ---------------------------------------- |
+| defineClass(byte[], int, int) | 将字节流解析成 JVM 能够识别的 Class 对象 |
+| findClass(String)             | 需被重写以获取要加载类的字节码           |
+| resolveClass(Class<?> c)      | 链接类                                   |
+| loadClass(String)             | 加载某个类                               |
+
+因为有 defineClass 方法的存在，构建对象实例的字节码不仅可以是编译后产生的 class 文件，它还可能是从网络上传输过来的字节流，或者是在内存中 **动态生成的增强字节码**。
+
+#### 双亲委派加载模型
+
+加载类对象时会调用 `loadClass` 方法：
+
+```java
+protected Class<?> loadClass(String name, boolean resolve)
+        throws ClassNotFoundException
+{
+    synchronized (getClassLoadingLock(name)) {
+        // First, check if the class has already been loaded
+        Class<?> c = findLoadedClass(name);
+        if (c == null) {
+            long t0 = System.nanoTime();
+            try {
+                if (parent != null) {
+                    c = parent.loadClass(name, false);
+                    // 如果有 parent 加载器，通过 parent 来加载
+                } else {
+                    c = findBootstrapClassOrNull(name);
+                }
+            } catch (ClassNotFoundException e) {
+                // ClassNotFoundException thrown if class not found
+                // from the non-null parent class loader
+            }
+
+            if (c == null) {
+                // If still not found, then invoke findClass in order
+                // to find the class.
+                long t1 = System.nanoTime();
+                c = findClass(name);
+                // 如果 parent 拒绝加载此类，则会有此类加载器完成加载
+
+                // this is the defining class loader; record the stats
+                sun.misc.PerfCounter.getParentDelegationTime().addTime(t1 - t0);
+                sun.misc.PerfCounter.getFindClassTime().addElapsedTimeFrom(t1);
+                sun.misc.PerfCounter.getFindClasses().increment();
+            }
+        }
+        if (resolve) {
+            resolveClass(c);
+        }
+        return c;
+    }
+}
+```
+
+#### 常见加载类错误分析
+
+| 类加载异常                  | 可能的原因                         |
+| --------------------------- | ---------------------------------- |
+| ClassNotFoundException      | 当前 classpath 下没有指定的文件    |
+| NoClassDefFoundError        | 命令行运行程序时，类前面没有加包名 |
+| UnsatisfiedLinkError        | 不小心把 JVM 中的某个 lib 删除了   |
+| ClassCastException          | 强制类型转换时，类型不匹配         |
+| ExceptionInInitializerError | 对象初始化时出现异常               |
+
+
+
+### 常用的 ClassLoader
+
+#### Web 应用中的 ClassLoader
+
+
+
+#### 实现自己的 ClassLoader
+
+
+
