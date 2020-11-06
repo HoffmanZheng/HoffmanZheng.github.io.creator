@@ -1,5 +1,5 @@
 ---
-title: "一：深入 Web 请求过程"
+title: "深入 Web 请求过程"
 author: "Chenghao Zheng"
 tags: ["Net"]
 categories: ["Reading notes"]

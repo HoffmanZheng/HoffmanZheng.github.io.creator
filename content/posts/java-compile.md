@@ -1,5 +1,5 @@
 ---
-title: "四：Javac 编译原理与 class 文件结构"
+title: "Javac 编译原理与 class 文件结构"
 author: "Chenghao Zheng"
 tags: ["Java"]
 categories: ["Reading notes"]

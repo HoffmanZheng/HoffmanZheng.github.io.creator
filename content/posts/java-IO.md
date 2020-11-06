@@ -1,5 +1,5 @@
 ---
-title: "二：深入分析 Java I/O 的工作机制"
+title: "深入分析 Java I/O 的工作机制"
 author: "Chenghao Zheng"
 tags: ["Java"]
 categories: ["Reading notes"]
