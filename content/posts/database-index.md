@@ -7,7 +7,7 @@ date: 2020-12-10T13:19:47+01:00
 draft: false
 ---
 
-在之前的博客 [Database：MySQL 数据库](https://chenghao.monster/2020/database-mysql/) 我已经介绍了自己对 MySQL 的一些基本认识，包括它的存储引擎、数据存储结构、索引及事务等，本篇及之后的一篇将着眼于 MySQL 的性能深入探究。
+在之前的博客 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 我已经介绍了自己对 MySQL 的一些基本认识，包括它的存储引擎、数据存储结构、索引及事务等，本篇及之后的一篇将着眼于 MySQL 的性能深入探究。
 
 索引是存储引擎用于快速找到记录的一种数据结构，它对良好的性能非常关键，它能让 MySQL 以最高效、扫描行数最少的方式找到需要的记录。本篇将结合 [《高性能 MySQL》](https://book.douban.com/subject/23008813/) 第五章 创建高性能的索引 的内容深入分析，如何使用索引来提高 MySQL 数据库的查询性能。
 
@@ -17,7 +17,7 @@ draft: false
 
 ### B-Tree 索引
 
-在 [Database：MySQL 数据库](https://chenghao.monster/2020/database-mysql/) 我已经介绍过 B-Tree 索引了，这里谈下一个面试常问的问题：为什么 MySQL 的索引要使用 B+ 树而不是其他的树形结构，比如 B 树？
+在 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 我已经介绍过 B-Tree 索引了，这里谈下一个面试常问的问题：为什么 MySQL 的索引要使用 B+ 树而不是其他的树形结构，比如 B 树？
 
 * B 树是一颗多叉树，相比于二叉树在相等数据量的情况下，树的高度更低，可以减少查询时的 I/O 次数。
 * B+ 树相比 B 树，只有叶子节点存放数据，非叶子节点只存储索引，这样就能在一张 16kb 的非叶子节点数据页中 **存储更多的指针**，降低树的高度，减少查询 I/O 次数，提高查询性能。

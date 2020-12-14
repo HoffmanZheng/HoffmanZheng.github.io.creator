@@ -23,7 +23,7 @@ draft: false
 
 我们在游览一个页面时发现有异常，通常考虑的就是是不是游览器做的缓存，这个时候可以按 **Ctrl + F5** 来重新请求到没有缓存的页面。这个组合键会直接向目标 URL 发送请求，而不会使用游览器缓存的数据；它会在 HTTP 的请求头中增加一些请求头，告诉服务器我们要获取最新的数据而不是缓存（以此也可以跳过前端部署的缓存服务器）。
 
-> 对 HTTP 请求头不太熟悉的同学可以先参考下我的计网学习笔记：[Net：计算机网络读书笔记](https://chenghao.monster/2020/net-http-tcp/)。
+> 对 HTTP 请求头不太熟悉的同学可以先参考下我的计网学习笔记：[Net：计算机网络读书笔记](https://nervousorange.github.io/2020/net-http-tcp/)。
 
 ![](/images/游览器缓存.jpg)
 
@@ -62,7 +62,7 @@ Cache-Control 与 Expires 都属于强缓存，在缓存时间内不会向服务
 
 我们通常使用 URL 域名来请求网络资源，它需要被解析成 IP 地址才能与远程主机建立连接，如何将域名解析成 IP 地址就属于 DNS 解析的工作范畴了。
 
-> 对 URL 域名仍不了解的同学可以先阅读下：[Web：浅析 URL](https://chenghao.monster/2020/web-url/)
+> 对 URL 域名仍不了解的同学可以先阅读下：[Web：浅析 URL](https://nervousorange.github.io/2020/web-url/)
 
 #### 域名缓存
 

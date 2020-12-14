@@ -7,7 +7,7 @@ date: 2020-03-27T10:19:47+01:00
 draft: false
 ---
 
-本篇为 [Java：初识多线程、原理及实现](https://chenghao.monster/2020/java-multi-thread/) 的续篇，介绍 Java 中的线程池，主要内容有：进程与线程、线程池化的意义、Executors 工具类、线程池工作流程、线程复用原理等。
+本篇为 [Java：初识多线程、原理及实现](https://nervousorange.github.io/2020/java-multi-thread/) 的续篇，介绍 Java 中的线程池，主要内容有：进程与线程、线程池化的意义、Executors 工具类、线程池工作流程、线程复用原理等。
 
 # 为什么需要线程池
 

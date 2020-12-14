@@ -36,7 +36,7 @@ OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(new Fi
 
 #### 字节与字符的转化接口
 
-字符在写入文件持久化或者网络传输之前，都需要先经过编码转换，下图中 InputStreamReader 就是从字节到字符的转化桥梁，在初始化时需要指定编码字符集，否则会采用操作系统默认的字符集，很可能出现乱码问题。具体的编码解码过程可以查看：[三：深入分析 Java Web 中的中文编码问题](https://chenghao.monster/2020/java-encode/)
+字符在写入文件持久化或者网络传输之前，都需要先经过编码转换，下图中 InputStreamReader 就是从字节到字符的转化桥梁，在初始化时需要指定编码字符集，否则会采用操作系统默认的字符集，很可能出现乱码问题。具体的编码解码过程可以查看：[深入分析 Java Web 中的中文编码问题](https://nervousorange.github.io/2020/java-encode/)
 
 ![](/images/Charset.png)
 
@@ -45,7 +45,7 @@ OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(new Fi
 
 读取和写入文件 I/O 都需要 [系统调用](https://baike.baidu.com/item/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8) 才能实现，那么就肯定存在内存用户空间和内核空间的切换。
 
-> 对用户态和内核态不熟悉的可以先去我之前的博客 [Java：线程池原理、源码分析](https://chenghao.monster/2020/java-threadpool/) 再温习一下。
+> 对用户态和内核态不熟悉的可以先去我之前的博客 [Java：线程池原理、源码分析](https://nervousorange.github.io/2020/java-threadpool/) 再温习一下。
 
 操作系统将用户内存空间和内核空间隔离开，虽然保障了内核程序运行的安全性，但使磁盘 I/O 多了一步从内核空间往用户空间复制的过程，使 I/O 成为了非常耗时的操作。为此，操作系统也是在内核空间做了缓存机制，如果用户程序访问的是缓存中的数据，就会从内核缓存中直接取出返回，以此减少 I/O 的响应时间。
 
@@ -106,7 +106,7 @@ public FileInputStream(File file) throws FileNotFoundException {
 
 ### 网络 I/O 工作机制
 
-数据从一台主机发送到网络中的另一台主机需要先确认有相互沟通的意向和能力，有关如何建立和关闭一个 TCP 连接可以参考我的 [Net：计算机网络读书笔记](https://chenghao.monster/2020/net-http-tcp/) 中的可靠数据传输章节。
+数据从一台主机发送到网络中的另一台主机需要先确认有相互沟通的意向和能力，有关如何建立和关闭一个 TCP 连接可以参考我的 [Net：计算机网络读书笔记](https://nervousorange.github.io/2020/net-http-tcp/) 中的可靠数据传输章节。
 
 #### Socket 通信链路
 

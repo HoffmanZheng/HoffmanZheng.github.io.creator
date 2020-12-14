@@ -1,4 +1,4 @@
-baseURL = "http://chenghao.monster"
+baseURL = "https://nervousorange.github.io/"
 languageCode = "en-us"
 title = "人间一场大梦"
 theme = "LeaveIt"
@@ -43,7 +43,7 @@ preserveTaxonomyNames = true
     since = 2019
     author = "Chenghao.Zheng"                     # Author's name
     avatar = "/images/me/unnamed.jpg"           # Author's avatar
-    subtitle = "写码五分钟，调试一晚上。"         # Subtitle
+    subtitle = "做时间的朋友"         # Subtitle
     cdn_url = ""           # Base CDN URL
     home_mode = "" # post or other
 

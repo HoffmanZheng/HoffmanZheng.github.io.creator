@@ -7,9 +7,7 @@ date: 2020-01-02T16:11:47+01:00
 draft: false
 ---
 
-本篇介绍 Java 中集合类框架的基础知识，包括 List，Set，Map。此外，关于使用频率最高的容器 HashMap 则会在另一篇博文 [Java：HashMap 源码解读](http://chenghao.monster/2020/java-hashmap/) 中详细分析；关于这些集合类的线程安全问题，会在 [Java：多线程下的安全容器](http://chenghao.monster/2020/java-thread-safe-collection/) 中进行讲述。
-
-
+本篇介绍 Java 中集合类框架的基础知识，包括 List，Set，Map。此外，关于使用频率最高的容器 HashMap 则会在另一篇博文 [Java：HashMap 源码解读](https://nervousorange.github.io/2020/java-hashmap/) 中详细分析；关于这些集合类的线程安全问题，会在 [Java：多线程下的安全容器](https://nervousorange.github.io/2020/java-thread-safe-collection/) 中进行讲述。
 
 # Collection 继承体系
 
