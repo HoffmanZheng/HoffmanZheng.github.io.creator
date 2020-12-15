@@ -46,7 +46,7 @@ draft: false
 
 ### 独立的列
 
-如果查询中的列不是独立的，则 MySQL 就不会使用索引。“独立的列” 指索引列不能是表达式的一部分，也不能是函数的参数。例如下面的查询：
+如果查询中的列不是独立的，MySQL 就不会使用索引。“独立的列” 指索引列不能是表达式的一部分，也不能是函数的参数。例如下面的查询，因为 `emp_no + 1` 表达式不是独立的列，使查询无法使用主键 `emp_no` 索引，只能使用效率低下的全表扫描。
 
 ~~~mysq
 explain(select emp_no, birth_date, first_name, last_name, gender, hire_date
