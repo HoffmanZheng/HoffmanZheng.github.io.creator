@@ -301,7 +301,26 @@ select emp_no from employees where emp_no = 10001 for update;
 
 ### 避免多个范围条件
 
-【范围条件查询与多个等值条件查询的对比】
+```mysql
+alter table employees add index (hire_date, birth_date)
+
+/** 范围条件查询 */
+explain(SELECT emp_no, birth_date, first_name, last_name, gender, hire_date
+FROM employees.employees where hire_date > '2000-01-20' and birth_date = '1964-06-12')
+
+id|select_type|table    |type |possible_keys|key      |key_len|ref|rows|Extra      |
+--|-----------|---------|-----|-------------|---------|-------|---|----|-----------|
+ 1|SIMPLE     |employees|range|hire_date    |hire_date|3      |   |   3|Using where|
+
+/** 多个等值条件查询，相比范围条件查询，IN() 列表可以继续使用后面的索引列 */
+explain(SELECT emp_no, birth_date, first_name, last_name, gender, hire_date
+FROM employees.employees where hire_date in ('2000-01-22', '2000-01-28', '2000-01-23') and birth_date = '1964-06-12')
+
+id|select_type|table    |type |possible_keys|key      |key_len|ref|rows|Extra      |
+--|-----------|---------|-----|-------------|---------|-------|---|----|-----------|
+ 1|SIMPLE     |employees|range|hire_date    |hire_date|6      |   |   3|Using where|
+```
+
 从 explain 给出的执行计划看，MySQL 是无法区分范围查询和多个等值条件查询的，但这两种的访问效率是不同的，对于范围条件查询，MySQL 无法再使用范围列后面的其他索引列了，但是对于多个等值条件查询则没有这个限制。
 
 如果想要检索出最近一周上线过并且年龄在 18~25 岁的用户，查询语句大概是下面这个样子：
@@ -318,8 +337,27 @@ and age between 18 and 25
 
 ### 优化排序
 
-【order by limit 翻页】
 在使用 limit 偏移量实现翻页时，如果翻页翻到比较靠后时查询可能会比较慢，因为 MySQL 需要花费大量的时间来扫描需要丢弃的数据，对此可行的策略有：反范式化、预先计算、缓存或是限制用户能够翻页的数量。
 
+```mysql
+explain(SELECT emp_no, birth_date, first_name, last_name, gender, hire_date
+FROM employees.employees order by hire_date asc limit 1000, 10)
+
+id|select_type|table    |type |possible_keys|key      |key_len|ref|rows|Extra|
+--|-----------|---------|-----|-------------|---------|-------|---|----|-----|
+ 1|SIMPLE     |employees|index|             |hire_date|6      |   |1010|     |
+```
+
 此外还有一个比较好的策略是使用 **延迟关联**，通过覆盖索引查询返回需要的主键，再根据主键关联原表获得需要的行，这样可以减少对不需要的数据的回表次数，具体写法如下：
-【延迟关联，减少大翻页的回表次数】
+
+```mysql
+explain(select t1.emp_no, birth_date, first_name, last_name, gender, hire_date from employees t1
+inner join(select emp_no from employees order by hire_date limit 1000, 10) t2 on t1.emp_no = t2.emp_no)
+
+id|select_type|table     |type  |possible_keys|key      |key_len|ref      |rows|Extra      |
+--|-----------|----------|------|-------------|---------|-------|---------|----|-----------|
+ 1|PRIMARY    |<derived2>|ALL   |             |         |       |         |  10|           |
+ 1|PRIMARY    |t1        |eq_ref|PRIMARY      |PRIMARY  |4      |t2.emp_no|   1|           |
+ 2|DERIVED    |employees |index |             |hire_date|3      |         |1010|Using index|
+```
+
