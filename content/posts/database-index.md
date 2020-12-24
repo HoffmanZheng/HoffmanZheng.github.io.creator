@@ -11,7 +11,7 @@ draft: false
 
 索引是存储引擎用于快速找到记录的一种数据结构，它对良好的性能非常关键，它能让 MySQL 以最高效、扫描行数最少的方式找到需要的记录。本篇将结合 [《高性能 MySQL》](https://book.douban.com/subject/23008813/) 第五章 创建高性能的索引 的内容深入分析，如何使用索引来提高 MySQL 数据库的查询性能。
 
-本篇使用和书本相同的 MySQL 5.5 版本，使用 [官方提供的测试数据库](https://github.com/datacharmer/test_db)，通过 [MySQL Workbench](https://dev.mysql.com/downloads/workbench/) 导入 dump 数据。
+本篇使用和书本相同的 MySQL 5.5 版本，使用 [官方提供的测试数据库](https://github.com/datacharmer/test_db) 作为示例，通过 [MySQL Workbench](https://dev.mysql.com/downloads/workbench/) 导入 dump 数据。
 
 # 索引的类型
 
