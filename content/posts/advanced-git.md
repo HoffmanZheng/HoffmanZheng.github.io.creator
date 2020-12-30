@@ -67,8 +67,6 @@ Git 是一个分布式版本控制系统，当我们从 GitHub 上 `clone` 一�
 
 git push 能够成功的前提是 **远程仓库的状态一定要是本地待 push 状态的父亲**，相互之间没有发生任何的分叉。
 
-![](/images/git-pull.png)
-
 当我们在 git push 失败后，通常会按照提示使用 git pull，随后会弹出一个合并窗口，这是因为 `git pull = git fetch + git merge`，fetch 会将远程仓库中所有的状态都拿到本地，merge 会从分叉点开始 **replay 重放** 到 origin 最新的提交，再执行合并过程。合并完成后，远程分支才成为本地分支的父亲，才可以继续完成 push 操作。
 
 ![](/images/git-merge-origin.png)
@@ -77,15 +75,33 @@ git push 能够成功的前提是 **远程仓库的状态一定要是本地待 p
 
 #### Merge
 
-Merge 会将多个仓库的状态（代码快照/代码副本）进行合并，Git 会逐行检查冲突，并尝试自动解决，当发现多个状态同时对某一行代码进行了修改时就会冲突报错，这时就需要通过人类的智慧挑选出正确的代码版本解决冲突，完成合并。
+Merge 会从提交状态的分叉点开始 **replay 重放** 到 `<commit>` 最新的提交，然后不同的仓库状态（代码快照/代码副本）进行合并，Git 会 **逐行检查冲突**，并尝试自动解决，当发现多个状态同时对某一行代码进行了修改时就会冲突报错，这时就需要通过人类的智慧挑选出正确的代码版本解决冲突，完成合并。
 
+![](/images/git-merge-description.png)
 
+Merge 的优点是简单，易于理解；记录了完整的历史；冲突解决简单（只需要解决一次冲突就可以）；缺点是历史（基于时间和提交记录的单线历史）杂乱无章；对 bisect 不友好。
 
-rebase squash
+#### rebase
+
+Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分支的提交 **重演** 一遍（Reapply commits on top of another base tip）。之前讲 commit 的时候说过，commit 对象都是不可变的，rebase 的重演并不是将 A、B、C 移动到 G 上面去，而是 **产生了三个全新的提交**，所以这个时候提交历史被改变了。
+
+![](/images/git-rebase.png)
+
+每次重演的时候，需要依次解决遇到的所有的冲突，痛苦的是 ，同一个文件可能需要反复的去解决冲突。Rebase 的优点是分支历史是一条直线，清楚直观；对 bisect 友好；缺点是较为复杂，劝退新手；如果冲突可能要重复解决；会⼲扰别⼈（**和别⼈共享的分⽀永远不要force push**） 
+
+* 每次 rebase 之后都需要使用 force push  才能更新远程分支（因为分支分叉了），所以 **只能在自己的分支上 rebase 共用分支**（rebase master 以 master 为基）。
+* 在自己的分支 my-feature 上 rebase master 合并之后，也是无法 push 到 origin 的，因为和 origin/my-feature 分叉了，但是可以 force push，因为是自己的分支，不会影响到别人。
+* 有个办法可以减少 rebase 时解决冲突的次数，使用 reset 恢复到 origin 分叉点，然后 commit 产生一个 “压扁的提交”（会丢失一些提交信息），再执行 rebase 的时候就只需要解决一次冲突就可以了。
+
+因此 rebase 的使用场景有：定时将你的分⽀和主⼲进⾏同步。分支开发，时间长久，要合并时发现冲突太多了，因此需要定期同步。这个场景使用 merge 的话，提交的历史记录就会杂乱不堪， rebase 保持提交历史是一根直线的状态。
+
+#### git merge --squash
+
+将当前分支的所有提交压扁成一个再提交到共用分支上去，优点是把所有变更合在⼀起，更容易阅读；bisect友好；想要回滚或者 revert ⾮常⽅便；缺点是丢失了所有的历史记录。
 
 ### 回退与重放
 
-reset revert cherry-pick
+checkout reset revert cherry-pick
 
 ### bisect 与 stash
 
