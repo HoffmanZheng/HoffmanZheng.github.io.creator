@@ -59,7 +59,7 @@ commit 对象是 **不可变** 的，`git commit --amend` 并没有修改原来�
 
 #### 远程仓库
 
-Git 是一个分布式版本控制系统，当我们从 GitHub 上 `clone` 一个仓库到本地后，相当于把整个远程仓库全部复制到了本地仓库，包括它的所有历史状态。clone 不一定要发生在网络上，它还可以在局域网或者磁盘上：
+Git 是一个分布式版本控制系统，当我们从 GitHub 上 `clone` 一个仓库到本地后，相当于把整个远程仓库全部复制到了本地仓库，包括它的所有历史状态。clone **不一定**要发生在网络上，它还可以在局域网或者磁盘上：
 
 ![](/images/git-clone.png)
 
@@ -83,13 +83,13 @@ Merge 的优点是简单，易于理解；记录了完整的历史；冲突解�
 
 #### rebase
 
-Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分支的提交 **重演** 一遍（Reapply commits on top of another base tip）。之前讲 commit 的时候说过，commit 对象都是不可变的，rebase 的重演并不是将 A、B、C 移动到 G 上面去，而是 **产生了三个全新的提交**，所以这个时候提交历史被改变了。
+Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分支的提交 **重演** 一遍（Reapply commits on top of another base tip）。之前讲 commit 的时候说过，commit 对象都是不可变的，rebase 的重演并不是将 A、B、C 移动到 G 上面去，而是 **产生了三个全新的提交** A' B' C'，所以这个时候提交历史被改变了。
 
 ![](/images/git-rebase.png)
 
-每次重演的时候，需要依次解决遇到的所有的冲突，痛苦的是 ，同一个文件可能需要反复的去解决冲突。Rebase 的优点是分支历史是一条直线，清楚直观；对 bisect 友好；缺点是较为复杂，劝退新手；如果冲突可能要重复解决；会⼲扰别⼈（**和别⼈共享的分⽀永远不要force push**） 
+每次重演的时候，需要依次解决遇到的所有的冲突，痛苦的是 ，同一个文件可能需要 **反复的去解决冲突** 。Rebase 的优点是分支历史是一条直线，清楚直观；对 bisect 友好；缺点是较为复杂，劝退新手；如果冲突可能要重复解决；会⼲扰别⼈（**和别⼈共享的分⽀永远不要force push**） 
 
-* 每次 rebase 之后都需要使用 force push  才能更新远程分支（因为分支分叉了），所以 **只能在自己的分支上 rebase 共用分支**（rebase master 以 master 为基）。
+* 每次 rebase 之后都需要使用 force push  才能更新远程分支（因为分支分叉了），所以 **只能在自己的分支上 rebase 共用分支**（rebase master）。
 * 在自己的分支 my-feature 上 rebase master 合并之后，也是无法 push 到 origin 的，因为和 origin/my-feature 分叉了，但是可以 force push，因为是自己的分支，不会影响到别人。
 * 有个办法可以减少 rebase 时解决冲突的次数，使用 reset 恢复到 origin 分叉点，然后 commit 产生一个 “压扁的提交”（会丢失一些提交信息），再执行 rebase 的时候就只需要解决一次冲突就可以了。
 
