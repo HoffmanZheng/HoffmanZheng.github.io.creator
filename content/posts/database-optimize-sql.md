@@ -166,7 +166,7 @@ inner join sakila.actor using(actor_id)
 
 （oracle 术语表述）可以用 film 表作为驱动表先查找 film_actor 表，然后以此结果为驱动再查找 actor 表，然而 explain 后看到的执行计划却是先用 actor 表驱动的，对此可以看下 explain `straight_join` 的执行计划，发现以 film 做驱动表后第一个关联表需要扫描更多的行数（优化器预估需要读取的数据页数），第二个和第三个关联表都是根据索引查询，速度都很快，所以在实际执行的时候 MySQL 选择了顺序倒转的执行方式，让查询进行更少的嵌套查询和回溯操作。
 
-关联优化器会尝试在所有的关联顺序中选择一个成本最小的来生成执行计划树，遍历每一个表然后逐个做嵌套循环计算每一颗可能的执行计划的成本，最后返回一个最优的执行计划。糟糕的是，如果有 n 个表关联，就需要检查 n 的阶乘中关联顺序，那所有可能的执行计划的 "**搜索空间**" 随着关联表个数增长的速度会非常快。当搜索空间非常大的时候，优化器不可能逐一评估每一种关联顺序的成本，当关联的表超过 `optimizer_search_depth` 时，优化器会选择使用 "**贪婪**" 搜索的方式查找 "最优" 的关联顺序，不会计算每一种关联顺序的成本，所以偶尔也会选择一个不是最优的执行计划。
+关联优化器会尝试在所有的关联顺序中选择一个成本最小的来生成执行计划树，遍历每一个表然后逐个做嵌套循环计算每一颗可能的执行计划的成本，最后返回一个最优的执行计划。糟糕的是，如果有 n 个表关联，就需要检查 n 的阶乘中关联顺序，那所有可能的执行计划的 "**搜索空间**" 随着关联表个数增长的速度会非常快。当搜索空间非常大的时候，优化器不可能逐一评估每一种关联顺序的成本，当关联的表超过 `optimizer_search_depth` 时，优化器会选择使用 "**贪婪**" 搜索的方式查找 "最优" 的关联顺序，不会计算每一种关联顺序的成本，所以偶尔也会选择一个 **不是最优** 的执行计划。
 
 * 将外连接转化成内连接
 
@@ -242,13 +242,45 @@ while outer_row
 end
 ~~~
 
-#### UNION 的限制
-
 ### 优化子查询
 
-MySQL 在 from 子句中遇到子查询时，先执行子查询并将其结果放到一个临时表中（MySQL 的临时表是没有任何索引的，在编写复杂的子查询和关联查询的时候需要注意这一点），然后将这个临时表当做一个普通表对待（派生表 derived）。
+MySQL 的子查询 **实现得非常糟糕**，最糟糕的一类查询是 where 条件中包含 IN() 的子查询语句。例如下面的查询：
+
+~~~mysql
+select * from sakila.film where film_id in
+(select film_id from sakila.film_actor where actor_id = 1)
+
+| id | select_type       |  table     |  type  |  possible_keys          |
+| -- | ----------------- | ---------- |------- |------------------------ |
+| 1 | PRIMARY            | film       | ALL    | Null                    |
+| 2 | DEPENDENT SUBQUERY | film_actor | eq_ref | PRIMARY，idx_fk_film_id |
+~~~
+
+一般会认为 MySQL 会先执行子查询返回所有包含 actor_id 为 1 的 film_id 列表，然后用 IN() 列列表查询。很不幸 MySQL 不是这样做的，MySQL 会将相关的外层表压倒子查询中，它认为这样可以更高效地查找到数据行，查询会被改写成下面的样子：
+
+~~~mysql
+select * from sakila.film where exists
+(select * from sakila.film_actor where actor_id = 1 and film_actor.film_id = film.film_id)
+~~~
+
+这时子查询需要根据 film_id 来关联外部表 film，因为需要 film_id 字段，MySQL 认为无法先执行这个子查询，所以它选择先对 film 表进行 **全表扫描**，然后根据返回的 film_id 逐个执行子查询。如果外层的表是一个非常大的表，那么这个查询的性能会非常糟糕。当然我们很容易用下面的办法来重写这个查询：
+
+~~~mysql
+select film.* from sakila.film 
+inner join sakila.film_actor using(film_id) where actor_id = 1
+~~~
+
+并不是所有的关联子查询的性能都很差，
+
+仍需注意的是，MySQL 在 from 子句中遇到子查询时，先执行子查询并将其结果放到一个临时表中（MySQL 的临时表是没有任何索引的，在编写复杂的子查询和关联查询的时候需要注意这一点），然后将这个临时表当做一个普通表对待（派生表 derived）。
+
+### 优化排序
 
 ### 优化 group by 和 distinct
 
 ### 优化 limit 分页
+
+### 优化 UNION 查询
+
+#### UNION 的限制
 
