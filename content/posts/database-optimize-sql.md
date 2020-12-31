@@ -118,8 +118,8 @@ select * from post where post.id in (123, 456, 567, 9098, 8904);
 
 count() 聚合函数很可能是 MySQL 中最容易被误解的前 10 个话题之一。`count (expression)` 统计表达式有值（不为 Null）的结果数，当 expression 不可能为空时，实际上就是在统计行数，比如 count(1)、count(*)，通配符 * 并不会像我们猜想的那样扩展成所有的列，实际上它会 **忽略所有的列**，直接统计行数。
 
-MyISAM 中不带任何 where 条件的 count(*) 非常快。
-* 因为无须实际地区计算表的行数，MySQL 可以利用存储引擎的特性直接获得这个值（MyISAM 维护了一个变量来放数据表的行数）。
+MyISAM 中不带任何 where 条件的 count(*) 非常快。（InnoDB 会选择最小的索引扫描来降低成本）
+* 因为无须实际地去计算表的行数，MySQL 可以利用存储引擎的特性直接获得这个值（MyISAM 维护了一个变量来放数据表的行数），当 MySQL 检测到一个表达式可以转化为常数的时候，就会一直 **把该表达式作为常数** 进行优化处理。
 * 但当统计带 where 子句的结果集行数，可以是统计某个列值的数量时，MyISAM 的 count() 和其他的存储引擎没有任何不同。
 * 有时候可以利用 MyISAM count(*) 全表非常快的特性做一些优化：
 
@@ -139,12 +139,114 @@ select sum(IF(color = 'blue', 1, 0)) as blue, sum(IF(color = 'red', 1, 0)) as re
 select count(color = 'blue' OR Null) as blue, count(color = 'red' OR Null) as red from items;
 ~~~
 
-一般来说 count（） 查询都需要扫描大量的行（意味着访问大量数据）才能获得精确的结果，因此是比较难优化的，可以考虑使用索引覆盖扫描，或者增加汇总表（外部缓存）。不过很快就会陷入到一个熟悉的困境，"快速，精确和实现简单"，三者永远满足其二，必须舍弃掉其中一个。
+一般来说 count（） 查询都需要扫描大量的行（意味着访问大量数据）才能获得精确的结果，因此是比较难优化的，可以考虑使用 **索引覆盖扫描，或者增加汇总表**（外部缓存）。不过很快就会陷入到一个熟悉的困境，"快速，精确和实现简单"，三者永远满足其二，必须舍弃掉其中一个。
 
 
 ### 优化关联查询
 
+MySQL 优化器最重要的一部分就是关联查询优化，其中涵盖的要点太多，其中需要特别提到的是：
+
+* 确保 on 或者 using 子句中的列上有索引
+
+* 确保任何的 group by 和 order by 中的表达式只涉及到一个表中的列，这样 MySQL 才有可能使用索引来优化这个过程
+
+#### 查询优化器对关联查询做的优化
+
+* 重新定义关联表的顺序
+
+数据表的关联并不总是按照在查询中指定的顺序进行，决定关联的顺序是优化器很重要的一部分功能，关联查询优化器通过评估不同顺序的成本来选择一个代价最小的关联顺序。（在遇到右外连接时，MySQL 会将其改写成等价的左外连接。）
+
+比如下面的查询：
+
+~~~mysql
+select film.film_id, film.title, film.release_year, actor.acotor_id, actor.first_name, actor.last_name
+from sakila.film inner join sakila.film_actor using(film_id) 
+inner join sakila.actor using(actor_id)
+~~~
+
+（oracle 术语表述）可以用 film 表作为驱动表先查找 film_actor 表，然后以此结果为驱动再查找 actor 表，然而 explain 后看到的执行计划却是先用 actor 表驱动的，对此可以看下 explain `straight_join` 的执行计划，发现以 film 做驱动表后第一个关联表需要扫描更多的行数（优化器预估需要读取的数据页数），第二个和第三个关联表都是根据索引查询，速度都很快，所以在实际执行的时候 MySQL 选择了顺序倒转的执行方式，让查询进行更少的嵌套查询和回溯操作。
+
+关联优化器会尝试在所有的关联顺序中选择一个成本最小的来生成执行计划树，遍历每一个表然后逐个做嵌套循环计算每一颗可能的执行计划的成本，最后返回一个最优的执行计划。糟糕的是，如果有 n 个表关联，就需要检查 n 的阶乘中关联顺序，那所有可能的执行计划的 "**搜索空间**" 随着关联表个数增长的速度会非常快。当搜索空间非常大的时候，优化器不可能逐一评估每一种关联顺序的成本，当关联的表超过 `optimizer_search_depth` 时，优化器会选择使用 "**贪婪**" 搜索的方式查找 "最优" 的关联顺序，不会计算每一种关联顺序的成本，所以偶尔也会选择一个不是最优的执行计划。
+
+* 将外连接转化成内连接
+
+并不是所有的 outer join 语句都必须以外连接的方式执行，诸多因素可能让外连接等价于一个内连接，
+
+* 使用等价变换规则
+
+MySQL 可以使用一些等价变换来简化并规范表达式，合并和减少一些比较，移除一些恒成立和一些恒不成立的判断。
+
+* 等值传播
+
+如果两个列的值通过等式关联，那么 MySQL 能够把其中一个列的 where 条件传递到另一个列上。
+
+~~~mysql
+select film.film_id from sakila.film 
+inner join sakila.film_actor using(film_id) where film.film_id > 500
+/** where 子句中的 film_id 不仅适用于 film 表，而且对于 film_actor 表同样适用 */
+~~~
+
+* 列表 IN() 的比较
+
+在很多数据库系统中，IN() 完全等同于多个 OR 条件的子句，这在 MySQL 中是不成立的，MySQL 将 IN() 列表中的数据先进行排序，然后通过 **二分查找** 的方式来确定列表中的值是否满足条件，这是一个 `O(log n)` 复杂度的操作，而等价转换成 OR 查询的复杂度为 O(n)，对于 IN() 列表中有大量取值的时候，MySQL 的处理速度将会更快。
+
+#### MySQL 如何执行关联查询
+
+理解 MySQL 如何执行关联查询至关重要，`UNION` 查询会先将一系列单个查询的结果放到一个临时表中，然后再重新读出临时表来完成 union 查询；对 `JOIN` 会执行 **嵌套循环关联** 操作，即 MySQL 先在一个表中循环取出单条数据，然后再嵌套循环到下一个表中寻找匹配的行，依次下去直到找到所有表中匹配的行为止。然后根据各个表匹配的行，返回查询中需要的各个列。MySQL 会尝试在最后一个关联表中找到所有匹配的行，如果最后一个关联表无法找到更多的行，MySQL 返回到上一层关联表（**回溯**），看是否能够找到更多的匹配记录，依此类推迭代执行。
+
+* 内连接 INNER JOIN
+
+~~~mysql
+select tb1.col1, tb2.col2 from tb1 
+innner join tb2 using(col3) where tb1.col1 in (5, 6);
+
+/** 伪代码如下 */
+outer_iter = iterator over tb1 where col1 in (5, 6)
+outer_row = outer_iter.next
+while outer_row
+  inner_iter = iterator over tb2 where col3 = outer_row.col3
+  inner_row = inner_iter.next
+  where inner_row
+    output [outer_row.col1, inner_row.col2]
+    inner_row = inner_iter.next
+  end
+  outer_row = outer_iter.next
+end
+~~~
+
+内连接的泳道图如下所示：
+
+【图6-2】
+
+* 外连接 OUTER JOIN
+
+~~~mysql
+select tb1.col1, tb2.col2 from tb1 
+left outer join tb2 using(col3) where tb1.col1 in (5, 6)
+
+/** 伪代码如下 */
+outer_iter = iterator over tb1 where col1 in (5, 6)
+outer_row = outer_iter.next
+while outer_row
+  inner_iter = iterator over tb2 where col3 = outer_row.col3
+  inner_row = inner_iter.next
+  if inner_row
+    where inner_row
+      output [outer_row.col1, inner_row.col2]
+      inner_row = inner_iter.next
+    end
+  else
+    output [outer_row.col1, Null]   // 与内连接区别的地方
+  end
+  outer_row = outer_iter.next
+end
+~~~
+
+#### UNION 的限制
+
 ### 优化子查询
+
+MySQL 在 from 子句中遇到子查询时，先执行子查询并将其结果放到一个临时表中（MySQL 的临时表是没有任何索引的，在编写复杂的子查询和关联查询的时候需要注意这一点），然后将这个临时表当做一个普通表对待（派生表 derived）。
 
 ### 优化 group by 和 distinct
 
