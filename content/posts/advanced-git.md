@@ -101,11 +101,39 @@ Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分�
 
 ### 回退与重放
 
-checkout reset revert cherry-pick
+#### checkout
+
+Checkout 可以将代码 **复原到任何一个仓库状态** 上，且不修改仓库中的任何信息。在使用 tag 标签切换代码版本后，可能会提示版本 v5.0 不在任何一个分支上，即当前在脱离 HEAD 的状态，所做的提交都会被遗弃，需要按照提示创建一个新的分支，才能保留创建的提交。
+
+![](/images/git-checkout.png)
+
+所以 checkout 最重要的作用就是查看代码的历史版本，此外还可以使用 `git checkout -- <file>` 来丢弃工作区中的修改。
+
+![](/images/git-checkout--.png)
+
+#### reset
+
+Reset 会强行将当前分支 HEAD 指针移动到指定状态
+
+* --soft：只移动指针，不碰 暂存区 / 工作区，使本地的修改得到了完全的保留
+* --mixed（默认）：保留中间的文件变更，使其变成 not staged 状态（可以压扁提交，但会丢失中间的提交信息 ）
+* --hard：清空当前的全部修改
+
+#### cherry-pick
+
+将某个提交在另外的分⽀上 **重放**，使用场景为将一个 bug fix 同步到较老的产品中或者将在 master 上进行的变更希望进入 release 环节。
+
+先使用 checkout 切换到需要重放的分支上，然后 `git cherry-pick <commmitId>` 重放某个提交的修改，如果需要 cherry-pick 多个提交可以使用 `<commitId>..<commitId>` 来代表一个提交的区间。
+
+#### revert 
+
+产生一个 **反向提交**，撤销某个提交。使用场景为撤销历史中的某个更改，如 BUG 或不恰当的功能；或是回滚某次发布。`git revert <commitId>` ，revert 一个 revert 可以恢复之前的那次 revert。
 
 ### bisect 与 stash
 
+#### stash
 
+#### bisect
 
 # Github 协作详解
 
