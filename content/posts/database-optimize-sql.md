@@ -11,7 +11,7 @@ draft: false
 
 在 [Database：高性能 MySQL - 索引](https://nervousorange.github.io/2020/database-index/) 篇笔者已经讲述了索引对良好的性能有着重要的影响，但如果查询写的很糟糕，即使库表结果再合理、索引再合适，也无法实现高性能。本篇将结合 [《高性能 MySQL》](https://book.douban.com/subject/23008813/) 第六章 查询性能优化 的内容讲解 MySQL 如何真正地执行查询，查询高效和低效的原因何在，以及该如何合理的设计查询。
 
-本篇依然基于和书本相同的 MySQL 5.5 版本，本文所提及的一些 **优化器的限制** 在 MySQL 后续版本或是在 MariaDB 中得到了优化。
+本篇依然基于和书本相同的 MySQL 5.5 版本，本文所提及的部分 **优化器的限制** 在 MySQL 后续版本或是在 MariaDB 中得到了优化。
 
 
 # 查询执行的基础
@@ -255,10 +255,10 @@ MySQL 的子查询 **实现得非常糟糕**，最糟糕的一类查询是 where
 select * from sakila.film where film_id in
 (select film_id from sakila.film_actor where actor_id = 1)
 
-| id | select_type       |  table     |  type  |  possible_keys          |
-| -- | ----------------- | ---------- |------- |------------------------ |
-| 1 | PRIMARY            | film       | ALL    | Null                    |
-| 2 | DEPENDENT SUBQUERY | film_actor | eq_ref | PRIMARY, idx_fk_film_id |
+| id | select_type        |  table     |  type  |  possible_keys          |
+| -- | ------------------ | ---------- |------- |------------------------ |
+|  1 | PRIMARY            | film       | ALL    | Null                    |
+|  2 | DEPENDENT SUBQUERY | film_actor | eq_ref | PRIMARY, idx_fk_film_id |
 ~~~
 
 一般会认为 MySQL 会先执行子查询返回所有包含 actor_id 为 1 的 film_id 列表，然后用 IN() 列列表查询。很不幸 MySQL **不是** 这样做的，MySQL 会将相关的外层表压倒子查询中，它认为这样可以更高效地查找到数据行，查询会被改写成下面的样子：
@@ -276,13 +276,41 @@ select film.* from sakila.film
 inner join sakila.film_actor using(film_id) where actor_id = 1
 ~~~
 
-并不是所有的关联子查询的性能都很差，
-
-仍需注意的是，MySQL 在 from 子句中遇到子查询时，先执行子查询并将其结果放到一个临时表中（MySQL 的临时表是没有任何索引的，在编写复杂的子查询和关联查询的时候需要注意这一点），然后将这个临时表当做一个普通表对待（派生表 derived）。
+对于关联子查询，一般会建议使用左外连接（LEFT OUTER JOIN）来重写，但并不是所有的关联子查询的性能都很差，比如对于需要产生临时中间表（使用了 DISTINCT 或 GROUP BY）的关联查询，用 EXISTS 子查询重写后却能得到更好的查询效率。仍需注意的是，MySQL 在 from 子句中遇到子查询时，先执行子查询并将其结果放到一个临时表中（MySQL 的临时表是没有任何索引的，在编写复杂的子查询和关联查询的时候需要注意这一点），然后将这个临时表当做一个普通表对待（派生表 derived）。
 
 ### 优化排序
 
+排序是一个成本很高的操作，从性能角度考虑应该尽可能避免排序或者尽可能 **避免对大量数据进行排序**。在 [Database：高性能 MySQL - 索引](https://nervousorange.github.io/2020/database-index/) 已经介绍了 MySQL 如何通过索引进行排序，当不能使用索引生成排序结果时，MySQL 需要自己进行文件排序（filesort），如果数据量小则在内存中进行，如果数据量大（超过了排序缓冲区）则需要 **使用磁盘**，MySQL 会先将数据分块，对每个独立的块使用快速排序，并将各个块的排序结果放在磁盘上，最后合并返回。MySQL 有两种排序算法：
+
+* 两次传输排序（旧版本使用）
+
+读取行指针和需要排序的字段，对其进行排序，然后再根据排序结果读取所需要的数据行。这需要进行两次数据传输，第二次读取排序后的所有记录时，会产生大量的随机 I/O，成本非常高。当使用 MyISAM 表的时候成本会更高，因为 MyISAM 使用系统调用进行数据的读取，优点在于排序时存储尽可能少的数据，这让排序缓冲区中可以容纳更多的行数进行排序。
+
+* 单次传输排序（新版本使用）
+
+先读取查询所需要的所有列，然后再根据给定列进行排序，最后直接返回排序结果。这个算法在 MySQL 4.1 和后续更新的版本才引入，不再需要两次传输读取数据，对于 I/O 密集型的应用，这样做的效率高了很多。缺点是，如果返回的列非常多、非常大，会额外占用大量的空间，所以可能会有更多的排序块需要合并。
+
+当查询需要所有列的总长度不超过参数 `max_length_for_sort_data` 时，MySQL 使用单次传输排序，总大小超过或者任何需要的列是 BLOB 或者 TEXT 时则使用 two-pass 算法。
+
+MySQL 会分两种情况来处理关联查询时候的排序，如果 order by 子句中的所有列都来自关联的第一个表，那么在关联处理第一个表时就进行文件排序，在 explain 结果的 Extra 字段会有 `Using filesort`；除此之外的所有情况，MySQL 会将关联的结果存放到一个 **临时表** 中，然后在所有的关联都结束后，再进行文件排序，这样 Extra 字段可以看到 `Using temporary; Using filesort`，如果查询中有 limit 的话，limit 也会在排序之后应用，所以即使需要返回较少的数据，临时表和需要排序的数据量仍会非常大。
+
 ### 优化 group by 和 distinct
+
+很多场景下 MySQL 使用相同的办法优化这两种查询，优化器也会在内部处理时相互转化这两类查询，它们都可以使用索引来优化。当无法使用索引的时候，group by 使用临时表或者文件排序来做分组。
+
+如果需要对关联查询做分组 group by，并且是按照查找表中的某个列进行分组，那么通常采用查找表的标识列分组的效率会比其他列更高。
+
+~~~mysql
+select actor.first_name, actor.last_name, c.cnt from sakila.actor
+inner join (select actor_id, count(*) as cnt from sakila.film_actor group by actor_id) 
+as c using (actor_id);
+~~~
+
+虽然使用子查询和 `ONLY_FULL_GROUP_BY` 的 SQL_MODE 成本有点高，因为子查询需要创建和填充临时表，而子查询中创建的临时表是 **没有任何索引** 的。
+
+但在分组查询的 select 中直接使用非分组列（nonaggregated column，可以使用 MIN() 或者 MAX() 函数来绕过 SQL_MODE 的限制）通常不是什么好主意，因为这样的结果通常是不定的，当索引改变或者优化器选择不同的优化策略时都可能导致 **结果不一样**。MySQL 是不会对这类查询返回错误，这种写法大部分是由于偷懒而不是优化而设计的，所以建议将 SQL_MODE 设置为包含 `ONLY_FULL_GROUP_BY`，这时 MySQL 会对这类查询直接返回一个错误，提醒你需要重写这个查询。
+
+如果没有通过 order by 子句显式地指定排序列，分组查询会自动按照分组的字段进行排序，如果不关心结果集的顺序，而这种默认排序又导致了需要文件排序，则可以使用 `order by null` 让 MySQL 不再进行文件排序。
 
 ### 优化 limit 分页
 
