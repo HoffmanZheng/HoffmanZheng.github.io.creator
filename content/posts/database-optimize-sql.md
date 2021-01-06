@@ -312,7 +312,41 @@ as c using (actor_id);
 
 ### 优化 limit 分页
 
+我们通常会使用 limit 加上偏移量的方法实现分页，同时加上合适的 order by 子句，如果有对应的索引，通常效率应该不错。但在偏移量非常大的时候（翻页到非常后的页面），比如 `limit 10000, 20` 需要查询 10020 条记录然后只返回最后 20 条，前面的 10000 条记录都将被抛弃，这样查询的代价非常高。要优化这种大偏移量的 limit 分页查询，要么是在页面中限制分页的数量，要么是优化大偏移量的性能。
+
+优化此类分页查询的一个最简单办法就是尽可能地使用索引覆盖扫描 **延迟关联**，这在 [Database：高性能 MySQL - 索引](https://nervousorange.github.io/2020/database-index/) 最后面的索引案例学习中的优化排序有具体的讲解。
+
+limit 和 offset 的问题，其实是 offset 的问题，它会导致 MySQL 扫描大量不需要的行然后再抛弃掉。如果可以使用书签记录上次取数据的位置，那么下次就可以直接从该书签记录的位置开始扫描，这样就可以 **避免使用 offset**。比如前一次查询返回的主键是 16030 的租借记录，那么下一页的查询就可以从 16030 这个点开始：
+
+~~~mysql
+select * from sakila.rental where rental_id < 16030 
+order by rental_id desc limit 20
+~~~
+
 ### 优化 UNION 查询
 
-#### UNION 的限制
+有时，MySQL **无法** 将限制条件从外层 "下推" 到内层，使得原本能够限制部分返回结果的条件无法应用到内层查询的优化上。比如希望 UNION 的各个子句能够根据 LIMIT 只取部分结果集，或者希望能够先排好序再合并结果集的话，就需要在 UNION 的各个子句中分别使用这些子句。
 
+~~~mysql
+/** 会将 actor 和 customer 表中的记录都取出来放到一个临时表中，然后再从临时表取出前 20 条 */
+(select first_name, last_name from sakila.actor order by last_name)
+union all
+(select first_name, last_name from sakila.customer order by last_name)
+limit 20
+
+/** 从 actor 和 customer 表中各取 20 条记录放到临时表中 */
+(select first_name, last_name from sakila.actor order by last_name limit 20)
+union all
+(select first_name, last_name from sakila.customer order by last_name limit 20)
+limit 20
+/** 仍需注意：从临时表中取出数据的顺序并不是一定的，
+如果想获得正确的顺序，还需要加上一个全局的 ORDER BY 和 LIMIT 操作 */
+~~~
+
+MySQL 总是通过创建并填充临时表的方式来执行 UNION 查询，因此很多优化策略在 UNION 查询中都 **没法很好地使用**，经常需要手动地将 WHERE、LIMIT、ORDER BY 等子句 "下推" 到 UNION 的各个子查询中，以便优化器可以充分利用这些条件进行优化。
+
+除非确实需要服务器消除重复的行，否则就一定要使用 UNION ALL，如果没有 ALL 关键字，MySQL 会给临时表加上 DISTINCT 选项，这会导致 **对整个临时表的数据做唯一性检查**，这样做的代价非常高。事实上，MySQL 总是将结果放入临时表，然后再读出，再返回给客户端，虽然很多时候这样做是没有必要的，MySQL 可以直接把这些结果返回给客户端。
+
+### 优化全文索引
+
+TODO
