@@ -133,7 +133,22 @@ Reset 会强行将当前分支 HEAD 指针移动到指定状态
 
 #### stash
 
+临时性将⼯作⽬录的变更储存起来，然后清空⼯作⽬录（类⽐「存档/读档」）。`git stash` （需要先使用 git add 添加到暂存区），`git stash pop`（把原先的更改从储藏室中恢复），`git stash list` 可以查看当前储藏的变更列表。
+
+使用场景：
+
+* 你正在开⼼的开发，突然来了⼀个线上 bug
+* 你只好将⼿头的⼯作全部储存起来之后，开始别的⼯作
+* 结果⼜来了⼀件优先级更⾼的 bug（再次 git stash，`git stash apply stash@{N}` 进行恢复）
+* 完成别的⼯作之后回来继续
+
 #### bisect
+
+Bisect 用于在提交历史中查找某处引入的 bug，在问题可以稳定重现的时候，可以迅速定位出问题的代码，有的时候这比直接去 debug 更快捷。
+
+1.  `git bisect start/reset`  
+2. 切换提交历史后， `git bisect good/bad/skip`  
+3. `git bisect run ./run.sh`  使用脚本实现自动化 bisect
 
 # Github 协作详解
 
