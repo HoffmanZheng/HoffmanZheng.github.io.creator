@@ -89,6 +89,8 @@ Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分�
 
 每次重演的时候，需要依次解决遇到的所有的冲突，痛苦的是 ，同一个文件可能需要 **反复的去解决冲突** 。Rebase 的优点是分支历史是一条直线，清楚直观；对 bisect 友好；缺点是较为复杂，劝退新手；如果冲突可能要重复解决；会⼲扰别⼈（**和别⼈共享的分⽀永远不要force push**） 
 
+![](/images/git-rebase-practice.png)
+
 * 每次 rebase 之后都需要使用 force push  才能更新远程分支（因为分支分叉了），所以 **只能在自己的分支上 rebase 共用分支**（rebase master）。
 * 在自己的分支 my-feature 上 rebase master 合并之后，也是无法 push 到 origin 的，因为和 origin/my-feature 分叉了，但是可以 force push，因为是自己的分支，不会影响到别人。
 * 有个办法可以减少 rebase 时解决冲突的次数，使用 reset 恢复到 origin 分叉点，然后 commit 产生一个 “压扁的提交”（会丢失一些提交信息），再执行 rebase 的时候就只需要解决一次冲突就可以了。
