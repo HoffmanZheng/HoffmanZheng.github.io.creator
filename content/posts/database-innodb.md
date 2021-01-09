@@ -7,7 +7,7 @@ date: 2021-01-07T13:19:47+01:00
 draft: false
 ---
 
-在之前的博客 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 中笔者已经介绍了自己对于关系型数据库 MySQL 的些许认识，但终觉不够深刻，本篇将结合 [《MySQL技术内幕：InnoDB存储引擎》](https://book.douban.com/subject/24708143/) 讲解作为 MySQL 企业级数据库应用的第一存储引擎 InnoDB 的核心实现和工作机制，主要内容有：缓冲池、线程工作机制、日志文件、锁、事务以及数据的备份与恢复等。
+在之前的博客 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 中笔者已经介绍了自己对于关系型数据库 MySQL 的些许认识，但终觉不够深刻，本篇将结合 [《MySQL技术内幕：InnoDB存储引擎》](https://book.douban.com/subject/24708143/) 讲解作为 MySQL 企业级数据库应用的第一存储引擎 InnoDB 的 **核心实现和工作机制**，主要内容有：缓冲池、线程工作机制、日志文件、锁、事务以及数据的备份与恢复等。
 
 ### MySQL 存储引擎
 
@@ -62,7 +62,7 @@ MySQL 数据库使用 Memory 存储引擎作为临时表来存放查询的中间
 
 下图简单展示了 InnoDB 存储引擎的体系架构，可以看到 InnoDB 主要由一个大的内存池和多个后台线程组成
 
-【图2-1】
+![](/images/InnoDB-architecture.jpg)
 
 #### 缓冲池
 
@@ -70,11 +70,17 @@ InnoDB 是 **基于磁盘** 的数据库系统（Disk-base Database），由于 
 
 可见缓冲池的大小直接影响着数据库的整体性能：
 
-【innodb_buffer_pool_size】
+~~~mysql
+show variables like 'innodb_buffer_pool_size';
+
+Variable_name          |Value    |
+-----------------------|---------|
+innodb_buffer_pool_size|134217728|
+~~~
 
 具体来看，缓冲池中缓存的数据页类型有：索引页、数据页、undo 页、插入缓冲、自适应哈希索引、InnoDB 存储的锁信息、数据字典信息等。
 
-【图2-2】
+![](/images/InnoDB-buffer-pool.jpg)
 
 * LRU
 
@@ -92,13 +98,23 @@ InnoDB 是 **基于磁盘** 的数据库系统（Disk-base Database），由于 
 
 异步 I/O 线程来处理写 I/O 请求，以极大地提高数据库的性能。可以通过 `show engine innodb status` 来观察 InnoDB 中的 IO Thread，默认为 1 个 insert buffer thread，1 个 log thread，4 个 read thread 和 4 个 write thread，可以使用 `innodb_read_io_threads` 和 `innodb_write_io_threads` 参数进行设置。
 
-【代码块 show engine innodb status】
+【缺 IO】
+
+~~~mysql
+show engine innodb status;
+~~~
 
 * Purge Thread
 
 在事务提交后，**回收已经使用并分配的 undo 页**。在 InnoDB 1.1 版本之前，purge 操作仅在 Master Thread 中完成，1.1 版本开始 purge 操作可以独立到单独的线程中进行，1.2 版本开始支持多个 Purge Thread 来加快 undo 页的回收，以此来减轻 Master Thread 的工作，从而提高 CPU 的使用率以及提升存储引擎的性能。
 
-【innodb_purge_threads】
+~~~mysql
+show variables like 'innodb_purge_threads';
+
+Variable_name       |Value|
+--------------------|-----|
+innodb_purge_threads|4    |
+~~~
 
 * Page Cleaner Thread
 

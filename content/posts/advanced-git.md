@@ -101,11 +101,17 @@ Rebase 文档介绍说的是：基于另外一个分支的尖端，将当前分�
 
 将当前分支的所有提交压扁成一个再提交到共用分支上去，优点是把所有变更合在⼀起，更容易阅读；bisect友好；想要回滚或者 revert ⾮常⽅便；缺点是丢失了所有的历史记录。
 
+![](/images/git-merge-squash.png)
+
+然后在公共的分支上产生一个压扁后的提交记录：
+
+![](/images/git-merge-squash-result.png)
+
 ### 回退与重放
 
 #### checkout
 
-Checkout 可以将代码 **复原到任何一个仓库状态** 上，且不修改仓库中的任何信息。在使用 tag 标签切换代码版本后，可能会提示版本 v5.0 不在任何一个分支上，即当前在脱离 HEAD 的状态，所做的提交都会被遗弃，需要按照提示创建一个新的分支，才能保留创建的提交。
+Checkout 可以将代码 **复原到任何一个仓库状态** 上，且不修改仓库中的任何信息。在使用 tag 标签切换代码版本后，可能会提示版本 v5.0 不在任何一个分支上，即当前在 **脱离 HEAD** 的状态，所做的提交都会被遗弃，需要按照提示创建一个新的分支，才能保留创建的提交。
 
 ![](/images/git-checkout.png)
 
@@ -151,6 +157,90 @@ Bisect 用于在提交历史中查找某处引入的 bug，在问题可以稳定
 1.  `git bisect start/reset`  
 2. 切换提交历史后， `git bisect good/bad/skip`  
 3. `git bisect run ./run.sh`  使用脚本实现自动化 bisect
+
+#### bisect 学习案例
+
+使用 git bisect 在 [Maven](https://github.com/apache/maven) 找出在 3.6.0 和 3.6.1 版本之间导致 [MNG-6700](https://issues.apache.org/jira/browse/MNG-6700) 的提交记录，可以使用 [MNG-6700 BUG Reproduction](https://github.com/hcsp/maven-issue-reproduction) 复现这个问题。
+
+~~~shell
+/** clone maven 项目到本地，切换版本，然后打包，解压包后就可以找到 mvn */
+git clone https://github.com/apache/maven.git
+git checkout maven-3.6.0
+mvn clean package -Dmaven.test.skip=true -Drat.skip=true
+unzip apache-maven/target/apache-maven-3.6.0-bin.zip -d .
+
+/** 执行另外一个目录下的 maven 构建，使用 -f 参数，发现 3.6.0 版本没有出现问题 */
+apache-maven-3.6.0/bin/mvn -f ../maven-issue-reproduction/pom.xml compile
+[INFO] --- maven-compiler-plugin:3.1:compile (default-compile) @ maven-issue-reproduction ---
+[INFO] Changes detected - recompiling the module!
+[INFO] Compiling 1 source file to C:\Users\zch69\recipes\temp\maven\..\maven-issue-reproduction\target\classes
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  16.961 s
+
+
+/** 使用 3.6.1 版本 compile 出错，复现问题 */
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:01 min
+[INFO] Finished at: 2021-01-09T11:33:01+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.jetbrains.kotlin:kotlin-maven-plugin:1.3.0:compile (compile) on project maven-issue-reproduction: Compilation failure: Compilation failure:
+[ERROR] C:\Users\zch69\recipes\temp\maven-issue-reproduction\common\Os.kt:[3,12] Redeclaration: Os
+[ERROR] C:\Users\zch69\recipes\temp\maven\..\maven-issue-reproduction\.\common\Os.kt:[3,12] Redeclaration: Os
+
+/** 标记 3.6.1 为有问题的版本，开始 bisect */
+git bisect bad
+You need to start by "git bisect start"
+Do you want me to do it for you [Y/n]? Y
+
+/** 标记 3.6.0 为没有问题的版本后，bisect 将仓库状态自动切换到了提交历史 2928dc6b6 */
+zch69@DESKTOP-BIRCN7U MINGW64 ~/recipes/temp/maven ((maven-3.6.1)|BISECTING)
+$ git checkout maven-3.6.0
+$ git bisect good
+Bisecting: 27 revisions left to test after this (roughly 5 steps)
+[2928dc6b68660cc5ac4022b0bfbc84d51d6905e4] refactoring: extracted initParent() method
+
+zch69@DESKTOP-BIRCN7U MINGW64 ~/recipes/temp/maven ((2928dc6b6...)|BISECTING)
+$ gst
+HEAD detached at 2928dc6b6
+You are currently bisecting, started from branch 'd66c9c0b3'.
+  (use "git bisect reset" to get back to the original branch)
+~~~
+
+之后手动重复以上过程就可以找到导致这个问题的提交记录，但完全可以用脚本来 **自动化** 这个过程：
+
+~~~shell
+#!/bin/sh
+
+VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout) 
+rm -rf apache-maven-*
+mvn clean package -Dmaven.test.skip=true -Drat.skip=true
+unzip apache-maven/target/apache-maven-$VERSION-bin.zip -d .
+apache-maven-$VERSION/bin/mvn -f ../maven-issue-reproduction/pom.xml compile
+~~~
+
+运行 `git bisect run ./run.sh` 后就可以等着最后的结果了：
+
+~~~shell
+8b7055fe3ff3696b821409a6904ff4d69aa3ff6b is the first bad commit
+commit 8b7055fe3ff3696b821409a6904ff4d69aa3ff6b
+Author: Mickael Istria <mistria@redhat.com>
+Date:   Thu Nov 29 22:21:29 2018 +0100
+
+    [MNG-6533] Prefer passing the interim project in ProjectBuildingResult
+
+    Initialize the interim project with "simple" items (ie do not build
+    not reference parent if it's not yet in the projectIndex) and returns
+    it when installation fails further.
+    This give a partial validation of the file, pretty convenient in IDEs.
+
+ .../maven/project/DefaultProjectBuilder.java       | 46 ++++++++++++++++------
+ 1 file changed, 33 insertions(+), 13 deletions(-)
+bisect run success
+~~~
 
 # Github 协作详解
 
