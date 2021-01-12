@@ -99,7 +99,7 @@ innodb_old_blocks_pct|37   |
 若是直接将读取到的页放入到 LRU 的首部，那么某些 SQL 操作（索引或者数据的扫描操作）可能会使缓冲池中的页被刷新出，从而影响缓冲池的效率。如果页被放入 LRU 列表的首部，可能将所需要的 **热点数据页** 从 LRU 列表中移除，为此 InnoDB 引入了 `innodb_old_blocks_time`，表示页读取到 mid 位置后需要等待多久才会被加入到 LRU 列表的热端。当页从 LRU 列表的 old 部分加入到 new 部分时，称此操作为 `page made young`，因设置了 innodb_old_blocks_time 导致页没有从 old 移动到 new 部分的操作称为 page_not_made_young
 
 ~~~mysql
-show variables like 'innodb_old_blocks_pct'
+show engine innodb status;
 
 ----------------------
 BUFFER POOL AND MEMORY
@@ -136,14 +136,74 @@ I/O sum[4]:cur[7], unzip sum[0]:cur[0]
 即使缓冲池足够大（可以缓存数据库中所有的数据）并且重做日志可以无限增大，宕机后数据库重新应用重做日志的 **数据恢复时间** 也会非常久，因此 checkpoint 技术解决了以下三个问题：
   1. 缩短数据库的恢复时间（宕机后只需对 checkpoint 后的重做日志进行恢复，这样就大大缩短了恢复时间）
   2. 缓冲池不够用时，刷新脏页到磁盘
-  3. 重做日志不可用时，刷新脏页
+  3. 重做日志不可用时，刷新脏页（重做日志缓冲 redo log buffer `innodb_log_buffer_size` 一般不需要设置得很大（默认 8 MB），因为每一秒钟都会将重做日志缓冲刷新到日志文件；磁盘中的重做日志设计成循环使用的，不再需要的重做日志可以被重复使用）
+  
+~~~mysql
+show engine innodb status;
 
+---
+LOG
+---
+Log sequence number 49109625455   // 重做日志的 LSN
+Log flushed up to   49109625455   // FLUSH 列表的 LSN
+Last checkpoint at  49109625197   // 已经刷新回磁盘最新页的 LSN
+0 pending log writes, 0 pending chkp writes
+6626161 log i/o's done, 0.08 log i/o's/second
+----------------------
+~~~
+
+InnoDB 通过 LSN Log Sequence Number 来标记版本，每个页有 LSN，重做日志中也有 LSN，Checkpoint 也有 LSN。InnoDB 有两种 Checkpoint 机制，在数据库关闭时将所有脏页刷新回磁盘的 `Sharp Checkpoint` （运行时使用影响数据库的可用性）和引擎内部使用的 `Fuzzy Checkpoint`，在以下几种情况下可能会发生 Fuzzy Checkpoint：
+  1. Master Thread Checkpoint：每秒/每十秒以异步方式刷新一定比例的脏页，不阻塞用户查询线程
+  2. FLUSH_LRU_LIST Checkpoint：检查 LRU 列表是否有 100 个可用空闲页（阻塞用户查询线程），否就刷新 LRU 尾端的脏页，从 MySQL 5.6 开始，这个检查被单独放在了 Page Cleaner 线程中，可以通过 `innodb_lru_scan_depth` 来控制 LRU 列表中可用页的数量
+  3. Async/Sync Flush Checkpoint：重做日志不可用时，强制刷新一些脏页回磁盘，保证重做日志的循环使用的可用性。从 MySQL 5.6 开始这个检查也被放入了 Page Cleaner 线程中来避免对用户查询线程的阻塞。
+  4. Dirty Page too much Checkpoint：为保证缓冲池中有足够可用的页，当脏页数量比例超过 `innodb_max_dirty_pages-pct` （MySQL 5.5 及之后版本，默认为 75）时进行刷新操作。
 
 #### 后台线程
 
+InnoDB 是多线程的模型，后台有多个不同的后台线程，负责处理不同的任务：
+
 * Master Thread
 
-核心的后台线程，主要负责将缓冲池中的数据异步刷新到磁盘，保证数据的一致性，包括脏页的刷新、合并插入缓冲、UNDO 页的回收等。
+核心的后台线程，完成 InnoDB 主要工作，负责将缓冲池中的数据异步刷新到磁盘，保证数据的一致性，包括脏页的刷新、合并插入缓冲、UNDO 页的回收等。
+
+**InnoDB 1.0.x（MySQL 5.1）** 版本之前的 Master Thread
+
+Master Thread 内部由多个循环组合，大多数的操作在主循环中，其中有两大部分的操作 —— 每秒钟的操作和每十秒的操作，其行为伪代码如下：
+
+~~~java
+void master_thread() {
+  goto loop;
+}
+loop:
+for (int i = 0; i < 10; i++) {               // 每秒钟的操作
+  thread_sleep(1)  // sleep 1 second
+  do log buffer flush to disk                // 刷新日志缓冲到磁盘，即使这个事务还没提交
+  if (last_one_second_ios < 5)              
+    do merge at most 5 insert buffer         // I/O 压力很小时（小于每秒 5 次），合并至多 5 个插入缓冲
+  if (buf_get_modified_ratio_pct > innodb_max_dirty_pages_pct)
+    do buffer pool flush 100 dirty page      // 当前缓冲池脏页比例过大时，刷新 100 个脏页到磁盘
+  if (no user activity) 
+    goto backgroud loop                      // 如果当前没有用户活动，则切换到 backgroud loop
+}
+                                             // ---------- 每十秒钟的操作 -------------
+if (last_ten_second_ios < 200) 
+  do buffer pool flush 100 dirty page        // I/O 压力较小时（过去 10 秒小于 200 次），刷新 100 个脏页到磁盘
+do merge at most 5 insert buffer             // 合并至多 5 个插入缓冲
+do log buffer flush to disk                  // 将日志缓冲刷新到磁盘
+do full purge                                // 删除无用的 Undo 页
+if (buf_get_modified_ratio_pct > 70%)
+  do buffer pool flush 100 dirty page        // 如果缓冲池脏页比例过大，刷新 100 个脏页，否则刷新 10 个脏页
+else
+  buffer pool flush 10 dirty page
+goto loop
+backgroud loop:
+  do something                               // 数据库空闲或者关闭时会被切换到 backgroud loop
+goto loop:
+~~~
+
+**InnoDB 1.2.x（MySQL 5.6）** 版本之前的 Master Thread
+
+
 
 * I/O Thread
 
