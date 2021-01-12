@@ -15,7 +15,7 @@ MySQL 数据库区别于其他数据库的最重要的一个特点就是其 **�
 
 ![](/images/mysql-architecture.png)
 
-需要注意的是，存储引擎是 **基于表的**，而不是数据库。每个存储引擎都有各自的特点，开发站应该根据具体的应用选择适合的存储引擎，以下是一些存储引擎的简单介绍：
+需要注意的是，存储引擎是 **基于表的**，而不是数据库。每个存储引擎都有各自的特点，开发者应该根据具体的应用选择适合的存储引擎，以下是一些存储引擎的简单介绍：
 
 #### InnoDB
 
@@ -47,7 +47,7 @@ MySQL 数据库区别于其他数据库的最重要的一个特点就是其 **�
 
 #### MySQL 的临时表
 
-MySQL 数据库使用 Memory 存储引擎作为临时表来存放查询的中间结果集。如果中间结果集大于 Memory 存储引擎表的容量设置，又或者中间结果中含有 TEXT 或 BLOB 列类型字段，则 MySQL 数据库会把其转换到 MyISAM 存储引擎表而 **放到磁盘中**。之前提到过 MyISAM 不缓存数据文件，因此这时产生的临时表的性能对于查询会有损失。
+MySQL 数据库使用 Memory 存储引擎作为临时表来存放 **查询的中间结果集**。如果中间结果集大于 Memory 存储引擎表的容量设置，又或者中间结果中含有 TEXT 或 BLOB 列类型字段，则 MySQL 数据库会把其转换到 MyISAM 存储引擎表而 **放到磁盘中**。之前提到过 MyISAM 不缓存数据文件，因此这时产生的临时表的性能对于查询会有损失。
 
 ### InnoDB 存储引擎
 
@@ -66,7 +66,7 @@ MySQL 数据库使用 Memory 存储引擎作为临时表来存放查询的中间
 
 #### 缓冲池
 
-InnoDB 是 **基于磁盘** 的数据库系统（Disk-base Database），由于 CPU 速度与磁盘速度之间的鸿沟，基于磁盘的数据库系统通常使用缓冲池，通过 **内存的速度** 来弥补磁盘速度较慢对性能的影响。查询时先判断该页是否在缓冲池中，如果在则称该页在缓冲池被命中，直接读取该页，否则读取磁盘上的页；修改时先修改在缓冲池中的页，然后再以一定的频率刷新到磁盘上。为了提高数据库的整体性能，页从缓冲区刷新回磁盘的操作 **并不是在每次页发生更新时触发**，而是通过一种称为 checkpoint 的机制刷新回磁盘。
+InnoDB 是 **基于磁盘** 的数据库系统（Disk-base Database），由于 CPU 速度与磁盘速度之间的鸿沟，基于磁盘的数据库系统通常使用缓冲池，通过 **内存的速度** 来弥补磁盘速度较慢对性能的影响。查询时先判断该页是否在缓冲池中，如果在则称该页在缓冲池被命中，直接读取该页，否则读取磁盘上的页；修改时先修改在缓冲池中的页，然后再以一定的频率刷新到磁盘上。为了提高数据库的整体性能，页从缓冲区刷新回磁盘的操作 **并不是在每次页发生更新时触发**，而是通过一种称为 `Checkpoint` 的机制刷新回磁盘。
 
 可见缓冲池的大小直接影响着数据库的整体性能：
 
@@ -98,7 +98,7 @@ innodb_old_blocks_pct|37   |
 
 若是直接将读取到的页放入到 LRU 的首部，那么某些 SQL 操作（索引或者数据的扫描操作）可能会使缓冲池中的页被刷新出，从而影响缓冲池的效率。如果页被放入 LRU 列表的首部，可能将所需要的 **热点数据页** 从 LRU 列表中移除，为此 InnoDB 引入了 `innodb_old_blocks_time`，表示页读取到 mid 位置后需要等待多久才会被加入到 LRU 列表的热端。当页从 LRU 列表的 old 部分加入到 new 部分时，称此操作为 `page made young`，因设置了 innodb_old_blocks_time 导致页没有从 old 移动到 new 部分的操作称为 page_not_made_young
 
-~~~mysql
+~~~shell
 show engine innodb status;
 
 ----------------------
@@ -107,7 +107,7 @@ BUFFER POOL AND MEMORY
 Total memory allocated 137363456; in additional pool allocated 0
 Dictionary memory allocated 10088749
 Buffer pool size   8191     // 缓冲池中页的数量，除了 LRU 还可能有自适应哈希索引、插入缓冲、锁信息等
-Free buffers       0        // 
+Free buffers       0        
 Database pages     7545     // LRU 列表中页的数量
 Old database pages 2765
 Modified db pages  0        // 脏页的数量
@@ -137,16 +137,16 @@ I/O sum[4]:cur[7], unzip sum[0]:cur[0]
   1. 缩短数据库的恢复时间（宕机后只需对 checkpoint 后的重做日志进行恢复，这样就大大缩短了恢复时间）
   2. 缓冲池不够用时，刷新脏页到磁盘
   3. 重做日志不可用时，刷新脏页（重做日志缓冲 redo log buffer `innodb_log_buffer_size` 一般不需要设置得很大（默认 8 MB），因为每一秒钟都会将重做日志缓冲刷新到日志文件；磁盘中的重做日志设计成循环使用的，不再需要的重做日志可以被重复使用）
-  
-~~~mysql
+
+~~~shell
 show engine innodb status;
 
 ---
 LOG
 ---
-Log sequence number 49109625455   // 重做日志的 LSN
-Log flushed up to   49109625455   // FLUSH 列表的 LSN
-Last checkpoint at  49109625197   // 已经刷新回磁盘最新页的 LSN
+Log sequence number 49109625455      // 重做日志的 LSN
+Log flushed up to   49109625455      // FLUSH 列表的 LSN
+Last checkpoint at  49109625197      // 已经刷新回磁盘最新页的 LSN
 0 pending log writes, 0 pending chkp writes
 6626161 log i/o's done, 0.08 log i/o's/second
 ----------------------
@@ -175,7 +175,7 @@ void master_thread() {
   goto loop;
 }
 loop:
-for (int i = 0; i < 10; i++) {               // 每秒钟的操作
+for (int i = 0; i < 10; i++) {               // ---------- 每秒钟的操作 -------------
   thread_sleep(1)  // sleep 1 second
   do log buffer flush to disk                // 刷新日志缓冲到磁盘，即使这个事务还没提交
   if (last_one_second_ios < 5)              
