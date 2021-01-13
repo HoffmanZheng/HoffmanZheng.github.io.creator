@@ -51,7 +51,7 @@ MySQL 数据库使用 Memory 存储引擎作为临时表来存放 **查询的中
 
 ### InnoDB 存储引擎
 
-早期的 InnoDB 的版本随着 MySQL 数据库的更新而更新，从 5.1 版本开始，MySQL 允许存储引擎开发商以动态方式加载引擎，官方称 InnoDB Plugin，其各个版本的功能升级如下表：
+早期的 InnoDB 的版本随着 MySQL 数据库的更新而更新，从 5.1 版本开始，MySQL 允许存储引擎开发商以动态方式加载引擎，官方称 **InnoDB Plugin**，其各个版本的功能升级如下表：
 
 | 版本     | 功能                                                 |
 | -------- | ---------------------------------------------------- |
@@ -203,7 +203,49 @@ goto loop:
 
 **InnoDB 1.2.x（MySQL 5.6）** 版本之前的 Master Thread
 
+通过看上面 Master Thread 在 InnoDB 1.0.x 版本之前的伪代码，可以发现由于 `hard coding` 导致存储引擎在 1 秒内至多处理 100 个页的写入和 20 个插入缓冲的合并，这在磁盘技术飞速发展的今天（特别是固态磁盘 SSD 出现后）成为了 I/O 性能的瓶颈。
 
+因此 InnoDB Plugin（从 InnoDB）提供一些参数来提高 I/O 性能：
+
+| 参数                        | 功能                                                 |
+| --------------------------- | ---------------------------------------------------- |
+| innodb_io_capacity          | 新增，默认 200，表示磁盘 I/O 吞吐量，是刷新脏页数量，* 5% 为合并插入缓冲数量        |
+| innodb_max_dirty_pages_pct  | 修改默认值从 90 至 75，降低每秒任务中判断缓冲池中脏页是否过多的比例                 |
+| innodb_adaptive_flushing    | 新增，通过判断产生重做日志的速度决定最合适的刷新脏页的数量                         |
+| innodb_purge_batch_size     | 新增，用于控制每次 full purge 时回收 Undo 页的数量                              |
+
+可以通过 SHOW ENGINE INNODB STATUS 查看当前 Master Thread 的状态信息，如下所示：
+
+~~~shell
+show engine innodb status;
+
+=====================================
+210111 18:33:26 INNODB MONITOR OUTPUT
+=====================================
+Per second averages calculated from the last 12 seconds     // 过去 12 秒内引擎的状态统计
+-----------------
+BACKGROUND THREAD
+-----------------
+srv_master_thread loops: 6572378 1_second, 6571948 sleeps, 589956 10_second, 678071 background, 677167 flush
+                       // 主线程 每秒操作次数，每秒挂起操作次数，每十秒操作次数，backgroud loop 次数，flush loop 次数  --- 说明服务器压力较小
+                       // 如果服务器压力较大，可以看到每秒挂起的次数小于每秒操作的次数；
+                       // 因为 InnoDB 做了一些优化，当压力大时不总是等待 1 秒，所以可以通过两者的差值反应当前数据库的负载压力
+srv_master_thread log flush and writes: 6663025
+----------
+~~~
+
+** InnoDB 1.2.x(MySQL 5.6)** 版本的 Master Thread
+
+InnoDB 1.2.x 版本再次对 Master Thread 做了优化，伪代码如下：
+
+~~~shell
+if InnoDB is idle
+  srv_master_do_idle_tasks();     // 之前版本每 10 秒的操作
+else 
+  srv_master_do_active_tasks()；  // 之前版本每秒钟的操作
+~~~
+
+此外，这个版本将刷新脏页的操作从 Master Thread 线程分离到一个单独的 Page Cleaner Thread 线程，从而减轻了 Master Thread 的工作，同时 **避免** 了 FLUSH_LRU_LIST Checkpoint 和 Async/Sync Flush Checkpoint **对用户查询线程的阻塞**，进一步提高了系统的并发性。
 
 * I/O Thread
 
@@ -243,7 +285,23 @@ innodb_purge_threads|4    |
 
 InnoDB 1.2.x 引入的，将 **脏页刷新** 操作放入单独的线程来完成，减轻原 Master Thread 的工作及对于用户查询线程的阻塞， 进一步提高 InnoDB 存储引擎的性能。
 
-### 日志文件
+#### InnoDB 关键特性
+
+TODO
+
+### 文件
+
+#### 错误日志
+
+#### 慢查询日志
+
+#### 二进制日志
+
+#### InnoDB 存储引擎文件
+
+表空间文件
+
+重做日志文件
 
 ### 锁
 
