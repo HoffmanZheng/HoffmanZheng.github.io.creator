@@ -287,15 +287,91 @@ InnoDB 1.2.x 引入的，将 **脏页刷新** 操作放入单独的线程来完�
 
 #### InnoDB 关键特性
 
-TODO
+【TODO】
 
 ### 文件
 
-#### 错误日志
+#### 错误日志与慢查询日志
 
-#### 慢查询日志
+* 错误日志
+
+错误日志文件对 MySQL 的启动、运行、关闭过程进行的记录。DBA 在遇到问题时应该首先查看该文件以便定位问题，该文件不仅 **记录了所有的错误信息**，也记录一些警告信息或者正确的信息，用户可以通过参数 `log_error` 来定位该文件：
+
+~~~shell
+show variables like 'log_error';
+
+Variable_name|Value                    |
+-------------|-------------------------|
+log_error    |/var/log/mysql/mysqld.log|     // 文件名默认为服务器的主机名
+~~~
+
+有时用户可以直接在错误日志文件中得到 **优化** 的帮助，因为有些警告（warning）很好地说明了问题所在：
+
+~~~shell
+InnoDB：If you are using big BLOB or TEXT rows, you must set the
+InnoDB：combined size of log files at least 10 times bigger than the largest such row.
+~~~
+
+* 慢查询日志
+
+通过错误日志可以得到一些关于数据库优化的信息，而慢查询日志（slow log）可帮助 DBA 定位可能存在问题的 SQL 语句，从而进行 **SQL 语句层面的优化**。MySQL 数据库默认并不启动慢查询日志，相关的参数如下表：
+
+| 参数                           | 功能                                                      |
+| ----------------------------- | --------------------------------------------------------- |
+| log_slow_queries              | 默认 OFF，设置为 ON 开启慢查询日志                            |
+| long_query_time               | 默认为 10(秒)，慢查询日志会记录运行时间超过该值的所有 SQL 语句   |
+| log_queries_not_using_indexes | 默认 OFF，开启后记录所有没有使用索引的查询语句                  |
+| log_throttle_queries_not_using_indexes   | MySQL 5.6.5 新增，默认 0(没有限制)，表示每分钟允许记录到 slow log 的未使用索引的 SQL 语句次数   |
+
+DBA 可以通过慢查询日志来找出有问题的 SQL 语句，对其进行优化，然而慢查询日志随着服务器运行时间的增加越来越多。DBA 可以通过 MySQL 提供的命令 `mysqldumpslow` 来分析慢查询日志文件。MySQL 5.1 开始可以将慢查询日志记录放到一张表中，这使得用户的查询更加方便和直观。
+
+~~~shell
+show create table mysql.slow_log;       // 慢查询表在 mysql 架构下名为 slow_log
+
+CREATE TABLE `slow_log` (
+  `start_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `user_host` mediumtext NOT NULL,
+  `query_time` time NOT NULL,
+  `lock_time` time NOT NULL,
+  `rows_sent` int(11) NOT NULL,
+  `rows_examined` int(11) NOT NULL,
+  `db` varchar(512) NOT NULL,
+  `last_insert_id` int(11) NOT NULL,
+  `insert_id` int(11) NOT NULL,
+  `server_id` int(10) unsigned NOT NULL,
+  `sql_text` mediumtext NOT NULL
+) ENGINE=CSV DEFAULT CHARSET=utf8 COMMENT='Slow log'       // 默认为 CSV 引擎，可改为 MyISAM，添加索引以提高查询效率
+
+show variables like 'log_output';       // 指定了慢查询输出的格式，设为 TABLE 改用 slow_log 表
+
+Variable_name|Value|     
+-------------|-----|
+log_output   |FILE |
+~~~
 
 #### 二进制日志
+
+二进制日志（binary log）记录了对 MySQL 数据库执行更改的所有操作（包括没有导致数据库发生变化的操作 `0 rows affected`），还记录了执行数据库更改操作的时间等其他额外信息，其主要有以下三种作用：
+
+* 恢复（recovery）：某些数据的恢复需要二进制日志，例如在一个数据库全备文件恢复后，可以进行 `point-in-time` 的恢复
+
+* 复制（replication）：通过复制和执行二进制日志实现主从（slave）数据库的实时同步
+
+* 审计（audit）：通过二进制日志中的信息来进行审计，判断是否有对数据库进行注入的攻击
+
+
+
+以下配置文件的参数影响着二进制日志记录的信息和行为：
+
+* `max_binlog_size`
+
+* `binlog_cache_size`
+
+* `sync_binlog`
+
+* `binlog-do-db`
+
+* `binlog-ignore-db`
 
 #### InnoDB 存储引擎文件
 
