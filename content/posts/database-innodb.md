@@ -359,25 +359,67 @@ log_output   |FILE |
 
 * 审计（audit）：通过二进制日志中的信息来进行审计，判断是否有对数据库进行注入的攻击
 
+通过在配置文件中配置参数 log-bin [=name] 启动二进制日志，开启后确实会影响性能，但性能的损失十分有限，考虑到可以使用复制和 point-in-time 的恢复，这些性能损失绝对是可以且应该被接收的。
 
+~~~shell
+shbu6dbl1:/etc # mysql --help | grep my.cnf              // 查看当 MySQL 数据库实例启动时，会在哪些位置查找配置文件
+order of preference, my.cnf, $MYSQL_TCP_PORT,
+/etc/my.cnf /etc/mysql/my.cnf /usr/etc/my.cnf ~/.my.cnf
+
+datadir = /data/mysql                                    // 二进制日志所在目录
+log-bin=master-bin                                       // 开启二进制日志
+log-bin-index=master-bin.index
+
+-rw-rw---- 1 mysql mysql       1393 Jun 23  2020 master-bin.000001       // 后缀名为二进制日志的序列号
+-rw-rw---- 1 mysql mysql    1030508 Jun 23  2020 master-bin.000002
+-rw-rw---- 1 mysql mysql        126 Jun 23  2020 master-bin.000003
+-rw-rw---- 1 mysql mysql      16485 Jun 23  2020 master-bin.000004
+-rw-rw---- 1 mysql mysql        126 Jun 23  2020 master-bin.000005
+-rw-rw---- 1 mysql mysql  249467313 Jul 28 14:28 master-bin.000006
+-rw-rw---- 1 mysql mysql      10034 Jul 28 17:02 master-bin.000007
+-rw-rw---- 1 mysql mysql        126 Jul 28 17:03 master-bin.000008
+-rw-rw---- 1 mysql mysql 1098762106 Sep  9 09:47 master-bin.000009
+-rw-rw---- 1 mysql mysql  742541453 Jan 15 16:26 master-bin.000010
+-rw-rw---- 1 mysql mysql        200 Sep  9 09:47 master-bin.index        // 二进制的索引文件
+~~~
 
 以下配置文件的参数影响着二进制日志记录的信息和行为：
 
-* `max_binlog_size`
+* `max_binlog_size`：指定单个二进制日志文件的最大值（从 5.0 开始默认为 1G），如果超过该值，则产生新的二进制文件，后缀名 + 1，并记录到 .index 文件
 
-* `binlog_cache_size`
+* `binlog_cache_size`：指定了未提交的二进制日志的缓冲大小（默认 32KB），等事务提交时再直接从缓冲中写入二进制日志文件，该参数是基于会话的，可以通过 `show global status like 'binlog_cache%'` 判断当前的 binlog_cache_size 设置是否合适
 
-* `sync_binlog`
+~~~shell
 
-* `binlog-do-db`
+// 使用缓冲写二进制日志的次数
+// 使用临时文件写二进制文件的次数
+~~~
 
-* `binlog-ignore-db`
+* `sync_binlog`：表示每写缓冲多少次就同步到磁盘，为了获得最大的高可用性，建议设置为 1，即采用同步写磁盘的方式
+
+* `binlog-do-db`：表示需要写二进制日志的库
+
+* `binlog-ignore-db`：表示忽略写入哪些库的日志，默认为空，即需要同步所有库的日志到二进制日志
+
+* `log-slave-update`：如果当前数据库是 slave，则不需要将从 master 取得并执行的二进制日志写入自己的二进制文件中去。如果是 master=>slave->slave 架构的复制，则必须设置该参数
+
+* `binlog_format`：十分重要的参数，影响了记录二进制日志的格式，它有三种模式：
+
+  * STATEMENT：MySQL 5.1 之前没有这个参数，所有的二进制文件都是基于 SQL 语句级别，binlog 只会记录可能引起数据变更的 SQL 语句；优势：该模式下，因为没有记录实际的数据，所以日志量和 IO 都消耗很低，性能是最优的；劣势：但有些操作并不是确定的，比如 rand、uuid() 函数会随机产生唯一标识，当依赖 binlog 回放时，该操作生成的数据与原数据必然是 **不一致** 的，此时可能造成无法预料的后果
+  
+  * ROW：在该模式下，binlog 记录的不再是简单的 SQL 语句了，而是记录每次操作的源数据与修改后的目标数据；优势：可以绝对精准的还原，从而保证了 **数据的安全与可靠**，并且复制和数据恢复过程可以是并发进行的（可以将 InnoDB 的事务隔离级别设置为 `READ COMMITTED`，以获得更好的 **并发性**）；劣势：缺点在于 binlog **体积** 会非常大，同时，对于修改记录多、字段长度大的操作来说，记录时性能消耗会很严重。阅读的时候也需要特殊指令来进行读取数据
+  
+  * MIXED：是对上述 STATEMENT 跟 ROW 两种模式的混合使用；对于绝大部分操作，使用 STATEMENT 来进行 binlog 的记录，只有以下操作使用 ROW 来实现：表的存储引擎为 NDB，使用了 uuid() 等不确定函数，使用了 insert delay 语句，使用了临时表，使用了用户定义函数
 
 #### InnoDB 存储引擎文件
 
-表空间文件
+除了 MySQL 数据库本身的文件外，每个表存储引擎还有其自己独有的文件：
 
-重做日志文件
+* 表空间文件
+
+InnoDB 将存储的数据按表空间（tablespace）进行存放，
+
+* 重做日志文件
 
 ### 锁
 
