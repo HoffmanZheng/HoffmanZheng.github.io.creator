@@ -7,7 +7,7 @@ date: 2021-01-07T13:19:47+01:00
 draft: false
 ---
 
-在之前的博客 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 中笔者已经介绍了自己对于关系型数据库 MySQL 的些许认识，但终觉不够深刻，本篇将结合 [《MySQL技术内幕：InnoDB存储引擎》](https://book.douban.com/subject/24708143/) 讲解作为 MySQL 企业级数据库应用的第一存储引擎 InnoDB 的 **核心实现和工作机制**，主要内容有：缓冲池、线程工作机制、日志文件、锁、事务以及数据的备份与恢复等。
+在之前的博客 [Database：MySQL 数据库](https://nervousorange.github.io/2020/database-mysql/) 中笔者已经介绍了自己对于关系型数据库 MySQL 的些许认识，但终觉不够深刻，本篇将结合 [《MySQL技术内幕：InnoDB存储引擎》](https://book.douban.com/subject/24708143/) 讲解作为 MySQL 企业级数据库应用的第一存储引擎 InnoDB 的 **核心实现和工作机制**，主要内容有：缓冲池、后台线程工作机制、日志文件、锁、事务以及数据的备份与恢复等。
 
 ### MySQL 存储引擎
 
@@ -136,7 +136,7 @@ I/O sum[4]:cur[7], unzip sum[0]:cur[0]
 即使缓冲池足够大（可以缓存数据库中所有的数据）并且重做日志可以无限增大，宕机后数据库重新应用重做日志的 **数据恢复时间** 也会非常久，因此 checkpoint 技术解决了以下三个问题：
   1. 缩短数据库的恢复时间（宕机后只需对 checkpoint 后的重做日志进行恢复，这样就大大缩短了恢复时间）
   2. 缓冲池不够用时，刷新脏页到磁盘
-  3. 重做日志不可用时，刷新脏页（重做日志缓冲 redo log buffer `innodb_log_buffer_size` 一般不需要设置得很大（默认 8 MB），因为每一秒钟都会将重做日志缓冲刷新到日志文件；磁盘中的重做日志设计成循环使用的，不再需要的重做日志可以被重复使用）
+  3. 重做日志不可用时，刷新脏页（重做日志缓冲 redo log buffer `innodb_log_buffer_size` 一般不需要设置得很大（默认 8 MB），因为每一秒钟都会将重做日志缓冲刷新到日志文件；磁盘中的重做日志文件设计成循环使用的，不再需要的重做日志可以被重复使用）
 
 ~~~shell
 show engine innodb status;
@@ -234,7 +234,7 @@ srv_master_thread log flush and writes: 6663025
 ----------
 ~~~
 
-** InnoDB 1.2.x(MySQL 5.6)** 版本的 Master Thread
+**InnoDB 1.2.x（MySQL 5.6）** 版本的 Master Thread
 
 InnoDB 1.2.x 版本再次对 Master Thread 做了优化，伪代码如下：
 
@@ -320,7 +320,7 @@ InnoDB：combined size of log files at least 10 times bigger than the largest su
 | ----------------------------- | --------------------------------------------------------- |
 | log_slow_queries              | 默认 OFF，设置为 ON 开启慢查询日志                            |
 | long_query_time               | 默认为 10(秒)，慢查询日志会记录运行时间超过该值的所有 SQL 语句   |
-| log_queries_not_using_indexes | 默认 OFF，开启后记录所有没有使用索引的查询语句                  |
+| log_queries_not_using_indexes | 默认 OFF，开启后记录所有 **没有使用索引** 的查询语句            |
 | log_throttle_queries_not_using_indexes   | MySQL 5.6.5 新增，默认 0(没有限制)，表示每分钟允许记录到 slow log 的未使用索引的 SQL 语句次数   |
 
 DBA 可以通过慢查询日志来找出有问题的 SQL 语句，对其进行优化，然而慢查询日志随着服务器运行时间的增加越来越多。DBA 可以通过 MySQL 提供的命令 `mysqldumpslow` 来分析慢查询日志文件。MySQL 5.1 开始可以将慢查询日志记录放到一张表中，这使得用户的查询更加方便和直观。
@@ -385,14 +385,21 @@ log-bin-index=master-bin.index
 
 以下配置文件的参数影响着二进制日志记录的信息和行为：
 
-* `max_binlog_size`：指定单个二进制日志文件的最大值（从 5.0 开始默认为 1G），如果超过该值，则产生新的二进制文件，后缀名 + 1，并记录到 .index 文件
+* `max_binlog_size`：指定单个二进制日志文件的最大值（从 MySQL 5.0 开始默认为 1G），如果超过该值，则产生新的二进制文件，后缀名 + 1，并记录到 .index 文件
 
 * `binlog_cache_size`：指定了未提交的二进制日志的缓冲大小（默认 32KB），等事务提交时再直接从缓冲中写入二进制日志文件，该参数是基于会话的，可以通过 `show global status like 'binlog_cache%'` 判断当前的 binlog_cache_size 设置是否合适
 
 ~~~shell
+show variables like 'binlog_cache%'
+Variable_name    |Value|
+-----------------|-----|
+binlog_cache_size|32768|              // 默认 32KB
 
-// 使用缓冲写二进制日志的次数
-// 使用临时文件写二进制文件的次数
+show global status like 'binlog_cache%'
+Variable_name        |Value  |
+---------------------|-------|
+Binlog_cache_disk_use|57     |        // 使用临时文件写二进制文件的次数
+Binlog_cache_use     |2097944|        // 使用缓冲写二进制日志的次数
 ~~~
 
 * `sync_binlog`：表示每写缓冲多少次就同步到磁盘，为了获得最大的高可用性，建议设置为 1，即采用同步写磁盘的方式
@@ -401,13 +408,13 @@ log-bin-index=master-bin.index
 
 * `binlog-ignore-db`：表示忽略写入哪些库的日志，默认为空，即需要同步所有库的日志到二进制日志
 
-* `log-slave-update`：如果当前数据库是 slave，则不需要将从 master 取得并执行的二进制日志写入自己的二进制文件中去。如果是 master=>slave->slave 架构的复制，则必须设置该参数
+* `log-slave-update`：如果当前数据库是 slave，则 **不需要** 将从 master 取得并执行的二进制日志写入自己的二进制文件中去。如果是 master=>slave->slave 架构的复制，则必须设置该参数
 
 * `binlog_format`：十分重要的参数，影响了记录二进制日志的格式，它有三种模式：
 
-  * STATEMENT：MySQL 5.1 之前没有这个参数，所有的二进制文件都是基于 SQL 语句级别，binlog 只会记录可能引起数据变更的 SQL 语句；优势：该模式下，因为没有记录实际的数据，所以日志量和 IO 都消耗很低，性能是最优的；劣势：但有些操作并不是确定的，比如 rand、uuid() 函数会随机产生唯一标识，当依赖 binlog 回放时，该操作生成的数据与原数据必然是 **不一致** 的，此时可能造成无法预料的后果
+  * STATEMENT：MySQL 5.1 之前没有这个参数，所有的二进制文件都是基于 SQL 语句级别，binlog 只会 **记录可能引起数据变更的 SQL 语句**；优势：该模式下，因为没有记录实际的数据，所以日志量和 IO 都消耗很低，性能是最优的；劣势：但有些操作并不是确定的，比如 rand、uuid() 函数会随机产生唯一标识，当依赖 binlog 回放时，该操作生成的数据与原数据必然是 **不一致** 的，此时可能造成无法预料的后果
   
-  * ROW：在该模式下，binlog 记录的不再是简单的 SQL 语句了，而是记录每次操作的源数据与修改后的目标数据；优势：可以绝对精准的还原，从而保证了 **数据的安全与可靠**，并且复制和数据恢复过程可以是并发进行的（可以将 InnoDB 的事务隔离级别设置为 `READ COMMITTED`，以获得更好的 **并发性**）；劣势：缺点在于 binlog **体积** 会非常大，同时，对于修改记录多、字段长度大的操作来说，记录时性能消耗会很严重。阅读的时候也需要特殊指令来进行读取数据
+  * ROW：在该模式下，binlog 记录的不再是简单的 SQL 语句了，而是记录每次操作的源数据与修改后的目标数据；优势：可以绝对精准的还原，从而保证了 **数据的安全与可靠**，并且复制和数据恢复过程可以是并发进行的（可以将 InnoDB 的事务隔离级别设置为 `READ COMMITTED`，以获得更好的 **并发性**）；劣势：缺点在于 binlog **体积** 会非常大，同时，对于修改记录多、字段长度大的操作来说，记录时 **性能消耗** 会很严重。阅读的时候也需要特殊指令来进行读取数据
   
   * MIXED：是对上述 STATEMENT 跟 ROW 两种模式的混合使用；对于绝大部分操作，使用 STATEMENT 来进行 binlog 的记录，只有以下操作使用 ROW 来实现：表的存储引擎为 NDB，使用了 uuid() 等不确定函数，使用了 insert delay 语句，使用了临时表，使用了用户定义函数
 
@@ -417,9 +424,39 @@ log-bin-index=master-bin.index
 
 * 表空间文件
 
-InnoDB 将存储的数据按表空间（tablespace）进行存放，
+InnoDB 将存储的数据按表空间（tablespace）进行存放，用户可以通过参数 `innodb_data_file_path` 对其进行设置：
+
+~~~shell
+[mysqld]
+innodb_data_file_path = /db/ibdata1:2000M;/dr2/db/ibdata2:2000M:autoextend
+// 将 ibdata1 和 ibdata2 两个文件组成表空间，用完后可以自动增长
+~~~
+
+所有基于 InnoDB 存储引擎的表的数据都会记录到该 **共享表空间** 中。如设置了参数 `innodb_file_per_table` 则会基于每个表产生一个独立表空间 `表名.ibd`，需要注意的是，这些单独的表空间文件仅存储该表的数据、索引和插入缓冲等信息，其余信息还是存放在默认的表空间中
+
+![](/images/innodb-ibdata-file.jpg)
 
 * 重做日志文件
+
+在 InnoDB 存储引擎的数据目录下有两个名为 ib_logfile0 和 ib_logfile1 的文件，他们记录了对于 InnoDB 存储引擎的事务日志。在实例因主机掉电失败时，会使用重做日志恢复到掉电前的时刻，以 **保证数据的完整性**。
+
+每个 InnoDB 存储引擎至少有一个重做日志文件组（group），每个文件组下至少有两个重做日志文件。用户可以设置多个镜像日志组（mirrored log groups）以得到更高的可靠性。**重做日志文件的大小** 对存储引擎的性能有非常大的影响，如果设置得很大，则在恢复时可能需要很长的时间；如果设置得过小，可能会导致一个事务的日志需要多次切换重做日志文件，或者导致频繁地发生 `Async Checkpoint`，导致性能的抖动。
+
+写入重做日志的操作不是直接写，而是先写入一个重做日志缓冲 redo log buffer，然后按照一定的条件顺序写入日志文件，如下图：
+
+![](/images/innodb-redo-log.jpg)
+
+主线程每秒会将重做日志缓冲写入磁盘的重做日志文件中，不论事务是否已经提交。另一个触发写磁盘的过程是由参数 `innodb_flush_log_at_trx_commit` 控制，表示在提交操作时，处理重做日志的方式：
+
+| innodb_flush_log_at_trx_commit 的值 | 处理重做日志的方式                         |
+| ----------------------------------- | ------------------------------------------ |
+| 0                                   | 提交事务时不写，等待主线程每秒的刷新       |
+| 1                                   | 执行事务提交时将重做日志 **同步** 写到磁盘 |
+| 2                                   | 执行事务提交时将重做日志 **异步** 写到磁盘 |
+
+为了保证事务 **ACID 的持久性**，必须将 `innodb_flush_log_at_trx_commit` 设置为 1，也就是每当有事务提交时就必须确保事务都已经写入重做日志文件。那么当数据库因为意外发生宕机时，可以通过重做日志文件恢复，并保证可以恢复已经提交的事务。
+
+与二进制日志文件的区别：二进制日志是在事务提交前就记录所有与 MySQL 数据库（包括其他存储引擎的）有关的日志记录，记录的都是关于一个事务的具体操作内容，是逻辑日志；而重做日志是在事务进行的过程中也在不断记录每个页更改的物理情况。
 
 ### 锁
 
