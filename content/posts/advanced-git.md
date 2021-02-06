@@ -7,7 +7,7 @@ date: 2020-12-28T13:19:47+01:00
 draft: false
 ---
 
-在 [Git 与 GitHub 使用指北](https://nervousorange.github.io/2019/git/) 中笔者已经介绍了 Git 及 GitHub 的基本操作，但对其原理不明所以，本篇将在之前的基础上结合 [Git Reference Manual](https://git-scm.com/docs) 介绍一些 Git 底层原理和高阶操作，以及 GitHub 的协作流程。
+在 [Git 与 GitHub 使用指北](https://nervousorange.github.io/2019/git/) 中笔者已经介绍了 Git 及 GitHub 的基本操作，但对其原理不明所以，本篇将在之前的基础上结合 [Git Reference Manual](https://git-scm.com/docs) 介绍一些 Git 底层原理和高阶操作，以及在 GitHub 协作的流程。
 
 # Git 进阶
 
@@ -244,3 +244,21 @@ bisect run success
 
 # Github 协作详解
 
+GitHub 已经逐渐成为软件行业的一个事实标准，几乎所有的开源项目都可以在 GitHub 上找到代码，它已经不只是一个网站、一个平台了，可以说它已经是软件行业的图腾或者说是宗教了。
+
+### GitHub 协作方式
+
+GitHub 的出现，一改之前项目协作的困难，使得任何人发现了 BUG 都可以来帮助修改。但不能把主分支的 **写权限** 随便给外面的人，以免用户滥用把仓库搞乱。所以就出现了 `fork` 方式的协同合作：
+
+![](/images/github-fork-process.png)
+
+~~~shell
+// fork 后的仓库并不会自动地随着上游仓库而更新，需要手动 sync a fork
+git remote add upstream https://github.com/apache/maven.git   // 添加上游仓库
+git fetch upstream  // 获取上游仓库的提交历史
+git merge upstream/master   // 获取更新
+~~~
+
+### GitHub 社区
+
+TODO
