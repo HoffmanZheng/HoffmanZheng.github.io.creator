@@ -523,14 +523,12 @@ MyISAM 自增长的实现和 InnoDB 不同，其采用表锁设计，自增长�
 
 外键用户引用完整性的约束检查，对于外键的插入或更新，首先需要查询父表中的记录，这时 **不会** 采用一致性非锁定读的方式，而是使用 `SELECT ... LOCK IN SHARE MODE` 的方式，主动给父表加一个 S 锁。如果这时父表上已经加了 X 锁，字表上的操作会被阻塞。如下表所示，如果访问父表时使用的是一致性非锁定读，这时 Session B 会读到父表有 id = 3 的记录，可以进行插入操作，但是如果会话 A 对事务提交了，则父表中就不存在 id = 3 的记录，这时数据在父、字表就会存在不一致的情况。
 
-| 时间 | 会话 A                                       | 会话 B                                 |
-| ---- | -------------------------------------------- | -------------------------------------- |
-| 1    | BEGIN                                        |                                        |
-| 2    | DELETE FROM parent WHERE id = 3;           |                                        |
-| 3    |                                              | BEGIN                                  |
-| 4    |                                              | INSERT INTO child SELECT 2,3
-                                                         # 第二列是外键，执行该句时被阻塞    |
-
+| 时间 | 会话 A                           | 会话 B                                                       |
+| ---- | -------------------------------- | ------------------------------------------------------------ |
+| 1    | BEGIN                            |                                                              |
+| 2    | DELETE FROM parent WHERE id = 3; |                                                              |
+| 3    |                                  | BEGIN                                                        |
+| 4    |                                  | INSERT INTO child SELECT 2,3 <br /># 第二列是外键，执行该句时被阻塞 |
 #### 锁的算法
 
 InnoDB 一共有三种行锁：
@@ -541,21 +539,50 @@ InnoDB 一共有三种行锁：
 | Gap Lock      | 间隙锁，锁定一个范围，但不包含记录本身               |
 | Next-Key Lock | Gap + Record Lock，锁定一个范围，并且锁定记录本身   |
 
-Record Lock 总是会去锁住索引记录，如果没有索引，则使用隐式的主键进行锁定，Next-Key Lock 设计的目的是为了解决幻读。然而当查询的索引含有唯一属性时，
+Record Lock 总是会去 **锁住索引记录**，如果没有索引，则使用隐式的主键进行锁定。Next-Key Lock 设计的目的是为了解决幻读，然而当查询的索引含有唯一属性时（查询条件需包含所有的唯一索引列，不然仍是 range 类型查询，依然使用 Next-Key Lock），InnoDB 会对 Next-Key Lock 进行优化，将其 **降级为 Record Lock**，即仅锁住索引本身，而不是范围，提高应用的并发性。
+
+```mysql
+CREATE TABLE z (a INT, b INT, PRIMARY KEY(a), KEY(b));
+
+INSERT INTO z SELECT 1,1;
+INSERT INTO z SELECT 3,1;
+INSERT INTO z SELECT 5,3;
+INSERT INTO z SELECT 7,6;
+INSERT INTO z SELECT 10,8;
+```
+
+若会话 A 执行 `SELECT * FROM z WHERE b=3 FOR UPDATE`，其通过索引列 b 进行查询，因此使用 Next-Key Locking 技术加锁，对两个索引分别进行锁定。对于聚集索引仅对列 a=5 的索引加上 Record Lock，对辅助索引加上 Next-Key Lock（1, 3），InnoDB 还会对辅助索引的下一个键值加上 Gap Lock，即还有一个范围为（3, 6）的锁。
+
+```shell
+SELECT * FROM z WHERE a = 5 LOCK IN SHARE MODE;    // a=5 聚集索引锁占用，阻塞
+INSERT INTO z SELECT 4,2;   // b=2 在辅助索引的锁范围内，阻塞
+INSERT INTO z SELECT 6,5;   // b=5 在辅助索引的锁范围内，阻塞
+
+// 下面的 SQL 不会被阻塞，可以立即执行
+INSERT INTO z SELECT 8,6;
+INSERT INTO z SELECT 2,0;
+INSERT INTO z SELECT 6,7;
+```
+
+可以看到，Gap Lock 的作用是为了阻止多个事务将记录插入到同一个范围内，而这会导致幻读 `Phantom Problem` 问题的产生。例如在上面的例子中，会话 A 已经锁定了 b = 3 的记录，若此时没有 Gap Lock 锁定（3, 6），那么用户可以插入索引列 b = 3 的记录，这会导致会话 A 中的用户再次执行同样查询时会返回不同的记录，导致幻读问题的产生。
 
 #### 锁问题
 
 * 脏读
-
 * 幻读 Phantom Problem
 
-* 不可重复读
+幻读指在同一事务下，连续执行两次同样的 SQL 语句，第二次可能会返回之前不存在的行。不同于 Oracle 数据库需要在 SERIALIZABLE 的事务隔离级别下才能解决幻读问题，InnoDB 在 RR 下就通过 Next-Key Lock 的算法避免了幻读。
 
+如果将事务隔离级别设置为 RC，将会关闭使用 Gap Lock，这样会破坏事务的隔离性，并且造成 replication **主从数据的不一致** 。此外，RC 的性能也不会优于默认的 RR。
+
+* 不可重复读
 * 丢失更新
 
 #### 阻塞
 
 #### 死锁
+
+
 
 ### 事务
 
