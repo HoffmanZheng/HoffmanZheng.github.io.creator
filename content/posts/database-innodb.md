@@ -618,11 +618,13 @@ INSERT INTO z SELECT 6,7;
 | m+2  |                                      |      UPDATE account SET cash=@cash-1 WHERE user = pUser       |
 | m+3  |                                      |       COMMIT;        |
 
-#### 阻塞
+#### 阻塞与死锁
+
+因为不同锁之前的兼容性问题，有时候事务中的锁需要等待另一个事务中的锁释放它所占用的资源，这就是阻塞，阻塞不是坏事，它可以确保事务可以并发且正常地运行。
+
+InnoDB 中使用参数 `innodb_lock_wait_timeout` 来控制等待的时间（默认为 50 秒），`innodb_rollback_on_timeout` 来设定是否在等待超时时对进行中的事务进行回滚操作（默认为 OFF，代表不回滚）。
 
 
-
-#### 死锁
 
 
 
