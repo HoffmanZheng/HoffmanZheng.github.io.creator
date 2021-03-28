@@ -3,7 +3,7 @@ title: "Java：异常处理与日志记录"
 author: "Chenghao Zheng"
 tags: ["java"]
 categories: ["Study notes"]
-date: 2021-03-17T13:19:47+01:00
+date: 2021-03-24T13:19:47+01:00
 draft: false
 ---
 
@@ -72,13 +72,41 @@ draft: false
 
 #### 日志的配置
 
+[Log4j 2.x 配置文档](https://logging.apache.org/log4j/2.x/manual/configuration.html) 中详细地介绍了如何通过配置文件来管理日志行为。在项目启动的时候，Log4j 会在 classpath 中搜索配置文件，然后使用对应的配置工厂 `ConfigurationFactory` 来配置 Logger。如果没有找到配置文件，则将会使用默认的配置。与默认配置等效的配置文件会看起来像：
 
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+  <Appenders>
+    <Console name="Console" target="SYSTEM_OUT">   // 日志输出到 console
+      <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>    // 日志格式
+    </Console>
+  </Appenders>
+  <Loggers>
+    <Root level="error">    // 默认根日志的级别为 error
+      <AppenderRef ref="Console"/>
+    </Root>
+  </Loggers>
+</Configuration>
+```
+
+如果想对某个 Logger 设置独立的日志级别，可以在配置文件中添加一个新的日志定义，如果想避免这个 Logger 下产生的日志重复提交给上级的根日志，可以将 `additivity` 设置为 false。
+
+以 XML 为例，
+
+此外 Log4j 还有以下特性：
+
+* Log4j 可以自动检测配置文件中的变化然后重新配置自己，即修改完日志配置文件后无需重启应用就可以生效。
+
+* Log4j 提供 “广告” 自己的日志配置文件，以便外部系统可以使用其中的文件路径、日志格式等信息智能地处理日志文件。
+
+**TODO**
 
 ### 日志打印最佳实践
 
 #### 记录日志的时机
 
-在看线上日志的时候，可曾陷入过有效日志被大量无意义的日志信息淹没的日志泥潭？
+在看线上日志的时候，可曾陷入过有效日志被 **大量无意义** 的日志信息淹没的日志泥潭？
 
 回归初衷，记录的日志大致有以下三种用途：
 
@@ -106,7 +134,7 @@ import org.slf4j.LoggerFactory;
 private static final Logger logger = LoggerFactory.getLogger({ClassName}.class);
 ```
 
-2. 根据 [Takipi](https://www.overops.com/blog/how-to-instantly-improve-your-java-logging-with-7-logback-tweaks/) 的测试结果，如果在日志中加入 Class 信息，性能会相比 Logback 的默认配置下降 6 成左右，因此如果一定要打印类信息，可以考虑用类名来命名 Logger。
+2. 虽然 Apache 在 [Log4j 2.x 使用文档](https://logging.apache.org/log4j/2.x/manual/usage.html) 中花了较大的篇幅阐明：logger name 会在 Logger 创建的时候被指定，当 log 方法被调用时日志事件却会反映出调用方的类名，这可能会与 Logger 的创建类有所 **不同**。但在文末，其指出在日志中打印出 location information（class name, method name and line number）会产生较大的 **性能损失**，如果方法名和行数不重要的话，最好 **确保每个类拥有它自己的 Logger**，这样 logger name 就能真实反映出执行 logging 的类。根据 [Takipi](https://www.overops.com/blog/how-to-instantly-improve-your-java-logging-with-7-logback-tweaks/) 的测试结果，如果在日志中加入 Class 信息，性能会相比 Logback 的默认配置 **下降 6 成左右**，因此如果一定要打印类信息，可以考虑用类名来命名 Logger。
 
 ![log-class-pattern](/images/log-class-pattern.png)
 
