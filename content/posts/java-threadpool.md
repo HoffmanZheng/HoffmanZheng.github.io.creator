@@ -129,6 +129,8 @@ ThreadPoolExecutor 中 使用 `AtomicInteger ctl` 记录线程池的运行状态
 
 Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到了这⼀步，如果看懂了前⾯讲的 ThreadPoolExecutor 构造⽅法中各种参数的意义，那么⼀看到 Executors 类中提供的线程池的源码就应该知道这个线程池是⼲嘛的。  
 
+不过 [阿里巴巴《Java 开发手册（嵩山版）》](https://developer.aliyun.com/topic/java20)  中指明 **不允许** 使用 Executors 创建线程池，而是通过 ThreadPoolExecutor 的方式，下面会通过源码进行分析。
+
 #### newCachedThreadPool
 
 ```java
@@ -138,6 +140,10 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
                                       new SynchronousQueue<Runnable>());
     }
 ```
+
+当一个任务提交时，corePoolSize 为 0 不创建核心线程，SynchronousQueue 是一个不存储元素的队列，可以理解为队里永远是满的，因此最终会创建非核心线程来执行任务。
+
+对于非核心线程空闲 60 s 时将被回收。因为 Integer.MAX_VALUE 非常大，可以认为是可以无限创建线程的，在资源有限的情况下容易引起 **OOM 异常**。
 
 当需要执⾏很多 **短时间** 的任务时，CacheThreadPool 的线程复⽤率⽐较⾼， 会显著的提⾼性能。⽽且线程 60s 后会回收，意味着即使没有任务进来，CacheThreadPool 并不会占⽤很多资源 。
 
@@ -153,7 +159,9 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
 
 可以看到 newFixedThreadPool 创建的都是核心线程，如果任务队列中没有任务可取，线程会一直阻塞在 getTask() 方法，而 newCachedThreadPool 会在等待 60s 后收回非核心线程。所以在没有任务的情况下 FixedThreadPool 会 **占用更多的资源**。
 
-两种线程池都⼏乎不会触发拒绝策略，但是原理不同。FixedThreadPool 是因为阻塞队列可以很⼤（最⼤为Integer最⼤值），故⼏乎不会触发拒绝策略；CachedThreadPool 是因为线程池很⼤（最⼤为Integer最⼤值），⼏乎不会导致线程数量⼤于最⼤线程数，故⼏乎不会触发拒绝策略 。
+和 SingleThreadExecutor 类似，都使用了无界队列，唯一的区别就是核心线程数不同，并且由于使用的是 LinkedBlockingQueue，在资源有限的时候容易引起 **OOM 异常**。
+
+两种线程池都⼏乎不会触发拒绝策略，但是原理不同。FixedThreadPool 是因为阻塞队列可以很⼤（最⼤为 Integer 最⼤值），故⼏乎不会触发拒绝策略；CachedThreadPool 是因为线程池很⼤（最⼤为Integer最⼤值），⼏乎不会导致线程数量⼤于最⼤线程数，故⼏乎不会触发拒绝策略 。
 
 #### newSingleThreadExecutor
 
@@ -163,10 +171,10 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
             (new ThreadPoolExecutor(1, 1,
                                     0L, TimeUnit.MILLISECONDS,
                                     new LinkedBlockingQueue<Runnable>()));
-    }
+    } 
 ```
 
-有且仅有⼀个核⼼线程，使⽤了 LinkedBlockingQueue（容量很⼤），所以，不会创建⾮核⼼线程。所有任务按照先来先执⾏的顺序执⾏。如果这个唯⼀的线程不空闲，那么新来的任务会存储在任务队列⾥等待执⾏。  
+因为 LinkedBlockingQueue 是长度为 `Integer.MAX_VALUE` 的队列，可以认为是 **无界队列**，因此往队列中可以插入无限多的任务，在资源有限的时候容易引起 **OOM 异常**，同时因为无界队列，maximumPoolSize 和 keepAliveTime 参数将无效，压根就不会创建非核心线程。
 
 #### newScheduledThreadPool
 
@@ -183,7 +191,27 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
 
 ⼀个定⻓线程池，⽀持定时及周期性任务执⾏。  
 
-四种常⻅的线程池基本够我们使⽤了，但是《阿⾥把把开发⼿册》**不建议** 我们直接使⽤ Executors 类中的线程池，⽽是通过 ThreadPoolExecutor 的⽅式，这样的处理⽅式让写的同学需要更加明确线程池的运⾏规则，规避资源耗尽的⻛险。
+四种常⻅的线程池基本够我们使⽤了，但是《阿⾥巴巴开发⼿册》**不建议** 我们直接使⽤ Executors 类中的线程池，⽽是通过 ThreadPoolExecutor 的⽅式，这样的处理⽅式让写的同学需要更加明确线程池的运⾏规则，规避资源耗尽的⻛险。
+
+- FixedThreadPool 和 SingleThreadExecutor => 允许的请求队列长度为 Integer.MAX_VALUE，可能会堆积大量的请求，从而引起 OOM 异常
+- CachedThreadPool => 允许创建的线程数为 Integer.MAX_VALUE，可能会创建大量的线程，从而引起 OOM 异常
+
+#### 如何定义线程池参数
+
+**CPU密集型 =>** 线程池的大小推荐为CPU数量 + 1，CPU数量可以根据 `Runtime.availableProcessors` 方法获取
+
+**IO密集型 =>** CPU 数量 * CPU利用率 * (1 + 线程等待时间 / 线程 CPU 时间)
+
+**混合型 =>** 将任务分为 CPU 密集型和 IO 密集型，然后分别使用不同的线程池去处理，从而使每个线程池可以根据各自的工作负载来调整
+
+**阻塞队列 =>** 推荐使用有界队列，有界队列有助于避免资源耗尽的情况发生
+
+**拒绝策略 =>** 默认采用的是 AbortPolicy 拒绝策略，直接在程序中抛出 RejectedExecutionException 异常【因为是运行时异常，不强制catch】，这种处理方式不够优雅。处理拒绝策略有以下几种比较推荐：
+
+- 在程序中捕获 RejectedExecutionException 异常，在捕获异常中对任务进行处理。针对默认拒绝策略
+- 使用 CallerRunsPolicy 拒绝策略，该策略会将任务交给调用 execute 的线程执行【一般为主线程】，此时主线程将在一段时间内不能提交任何任务，从而使工作线程处理正在执行的任务。此时提交的线程将被保存在 TCP 队列中，TCP 队列满将会影响客户端，这是一种 **平缓的性能降低**
+- 自定义拒绝策略，只需要实现 RejectedExecutionHandler 接口即可
+- 如果任务不是特别重要，使用 DiscardPolicy 和 DiscardOldestPolicy 拒绝策略将任务丢弃也是可以的
 
 ### 线程池主要的任务处理流程
 
