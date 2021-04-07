@@ -60,22 +60,22 @@ public ThreadPoolExecutor(int corePoolSize,
                           RejectedExecutionHandler handler) 
 ```
 
-* corePoolSize：核⼼线程数
-* maximumPoolSize：池内最大线程数
+* corePoolSize：核⼼线程数，在没有任务执行时线程池的大小
+* maximumPoolSize：池内最大线程数，在工作队列满了的情况下会创建出超过非核心的线程
 
 > 最大线程数 = 核心线程 + 非核心线程。非核心线程如果长时间闲置，就会被销毁。
 
-* keepAliveTime / unit：非核心线程闲置超时时长 / 时间单位
+* keepAliveTime / unit：非核心线程闲置超时时长 / 时间单位，当非核心线程的空闲时间超过存活时间后会被标记为可回收的，帮助回收空闲线程占有的资源
 * workQueue：阻塞的任务队列，保存那些即将被执行的任务
 
 > 阻塞队列：在任意时刻，不管并发有多高，永远只有一个线程能够进行队列的入队或者出队操作！无界|有界；队列满，只能进行出队操作，所有入队的操作必须等待，也就是被阻塞；队列空，只能进行入队操作，所有出队的操作必须等待，也就是被阻塞。
 
 * threadFactory：创建线程的工厂
 * rejectedExecutionHandler：当任务队列满且无法再创建非核心线程时会执行拒绝处理策略
-  * AbortPolicy 默认拒绝处理策略，丢弃任务并抛出RejectedExecutionException异常。  
-  * CallerRunsPolicy：由调⽤线程处理该任务  
-  * DiscardOldestPolicy：丢弃队列头部（最旧的）的任务，然后重新尝试执⾏程序
-  * DiscardPolicy：丢弃新来的任务  
+  * AbortPolicy 默认拒绝处理策略，丢弃任务并抛出 RejectedExecutionException 异常。  
+  * CallerRunsPolicy：由调⽤线程处理该任务，如果将 WebServer 改为有界队列和 “调用者运行” 饱和策略，当线程池中所有线程都被占用，并且工作队列也被填满后，下一个任务会 **在主线程中执行**。由于执行任务需要一定的时间，因此主线程至少在一段时间内不能提交任务任务。在这期间到达的请求会被保存在 TCP 层的队列中而不是在应用程序的队列中，如果持续过载，那么 TCP 层最终会发现它的请求队列被填满，然后开始抛弃请求。
+  * DiscardOldestPolicy：丢弃队列头部（最旧的）的任务，然后重新尝试执⾏程序，如果工作队列是一个优先级队列，那么 “抛弃最旧的” 策略将导致抛弃优先级最高的任务
+  * DiscardPolicy：悄悄丢弃新来的任务  
 
 ### 线程池的状态
 
@@ -174,7 +174,7 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
     } 
 ```
 
-因为 LinkedBlockingQueue 是长度为 `Integer.MAX_VALUE` 的队列，可以认为是 **无界队列**，因此往队列中可以插入无限多的任务，在资源有限的时候容易引起 **OOM 异常**，同时因为无界队列，maximumPoolSize 和 keepAliveTime 参数将无效，压根就不会创建非核心线程。
+单线程的线程池，可以通过线程封闭的方式确保不会有任务并发执行，实现线程安全性。因为 LinkedBlockingQueue 是长度为 `Integer.MAX_VALUE` 的队列，可以认为是 **无界队列**，因此往队列中可以插入无限多的任务，在资源有限的时候容易引起 **OOM 异常**，同时因为无界队列，maximumPoolSize 和 keepAliveTime 参数将无效，压根就不会创建非核心线程。
 
 #### newScheduledThreadPool
 
@@ -212,6 +212,78 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
 - 使用 CallerRunsPolicy 拒绝策略，该策略会将任务交给调用 execute 的线程执行【一般为主线程】，此时主线程将在一段时间内不能提交任何任务，从而使工作线程处理正在执行的任务。此时提交的线程将被保存在 TCP 队列中，TCP 队列满将会影响客户端，这是一种 **平缓的性能降低**
 - 自定义拒绝策略，只需要实现 RejectedExecutionHandler 接口即可
 - 如果任务不是特别重要，使用 DiscardPolicy 和 DiscardOldestPolicy 拒绝策略将任务丢弃也是可以的
+
+### 线程池的使用
+
+此处结合 [Java 并发编程实战](https://book.douban.com/subject/10484692/) 第八章 线程池的使用 介绍在使用任务执行框架时需要注意的各种危险，以及一些使用 Executor 的高级示例。
+
+#### 任务与执行策略之间的隐形耦合
+
+只有当任务都是同类型的并且相互独立时，线程池的性能才能达到最佳。由于线程池中的线程的 **可重用性**，必须在任务完成后在 try-finally 块中清除 `ThreadLocal` 变量，避免影响后续业务逻辑和造成内存泄漏等问题。
+
+如果提交的任务 **依赖** 于其他任务，那么除非线程池无限大，否则将可能造成死锁。试想在单线程的 Executor 中，一个任务将另一个任务提交到同一个 Executor，并等待这个被提交任务的结果，那么通常会引发死锁。第二个任务停留在队列中，等待第一个任务完成，而第一个任务又无法完成，因为它在等待第二个任务的完成。在更大的线程池中，如果所有正在执行任务的线程都由于等待其他仍处于队列中的任务而阻塞，则会发生同样的问题，称为 **线程饥饿死锁**。
+
+如果将 **运行时间较长** 的与运行时间较短的任务混合在一起，除非线程池很大，否则将可能造成 “拥塞”。执行时间较长的任务不仅会造成线程池堵塞，甚至还会增加执行时间较短任务的服务时间。如果线程池中的 **线程数量远小于** 在稳定状态下执行时间较长的任务数量，那么到最后可能所有的线程都会运行这些执行时间较长的任务，从而影响整体的响应性。
+
+有一项技术可以缓解执行时间较长任务造成的影响，即限定等待资源的时间，大多数可阻塞方法都提供了限时版本和无限时版本，如果 **等待超时** 就把任务标记为失败，这样就能将线程释放出来以执行一些能更快完成的任务。
+
+#### 线程池的配置与扩展
+
+在 [Java：并发编程实战](https://nervousorange.github.io/2021/java-concurrency/) 中介绍了无限制地创建线程将导致系统的不稳定性。虽然可以通过使用固定大小的线程池来解决这个问题，然而在高负载下如果新请求的到达速率超过了线程池的处理速率，请求会 **在队列中累计** 起来，应用程序仍可能耗尽资源。
+
+相比使用 newFixedThreadPool 和 newSingleThreadExecutor 默认的无界队列 `LinkedBlockingQueue`，使用有界队列如 `ArrayBlockingQueue` 可以有助于避免资源耗尽的情况发生。需要注意的是，只有当任务相互独立时，为线程池或工作队列设置界限才是合理的。如果任务之间存在依赖性，那么有界的线程池或队列就可能导致线程饥饿死锁问题。队列满后新到的任务将会根据饱和策略进行处理。有界队列的大小必须与线程池大小一起调节，如果线程池较小而队列较大，那么有助于减少内存使用量，降低 CPU 的使用率，同时还可以减少上下文切换，但付出的代码是可能会限制吞吐量。
+
+对于非常大或者无界的线程池（比如 newCachedThreadPool），可以通过使用 `SynchronousQueue` 来避免任务排队，它不是一个真正的队列（没有容量），而是一种在线程之间进行移交的机制。要将一个任务放入 SynchronousQueue 中，就必须有另一个线程正在等待这个任务，否则将会根据当前线程池的大小创建一个新的线程或者按照饱和策略拒绝掉这个任务。
+
+如果希望给线程池中的线程定制一些行为，例如指定一个 UncaughtExceptionHandler、给线程取一个更有意义的名称等，可以通过使用定制的线程工厂来实现：
+
+```java
+public class MyThreadFactory implements ThreadFactory {
+    public final String poolName;
+    
+    public MyThreadFactory(String poolName) {
+        this.poolName = poolName;
+    }
+    
+    public Threaed newThread(Runnable runnable) {
+        return new MyAppThread(runnable, poolName);
+    }
+}
+
+public class MyAppThread extends Thread {  
+    private static final AtomicInteger created = new AtomicInteger();
+    private static volatile boolean debugLifecycle = false;
+    private static final AtomicInteger alive = new AtomicInteger();  // 存活线程数
+    
+    public MyAppThread(Runnable runnable, String name) {
+        super(runnable, name + "-" + created.incrementAndGet());
+        setUncaughtExceptionHandler(    // 定制 UncaughtExceptionHandler
+        	new Thread.UncaughtExceptionHandler() {
+                public void uncaughtException(Thread t, Throwable e) {
+                    log.log(Level.SERVER, "UNCAUGHT in thread " + t.getName(), e);
+                }
+            });
+    }
+    
+    public void run() {
+        boolean debug = debugLifecycle;
+        if (debug) { log.log(Level.FINE, "Created " + getName()); }
+        try {
+            alive.incrementAndGet();
+            super.run();
+        } finally {
+            alive.decrementAndGet();
+            if (debug) { log.log(Level.FINE, "Exiting " + getName()); }
+        }
+    }
+    
+    public static int getThreadAlive() { return alive.get(); }
+}
+```
+
+// TODO
+
+#### 递归算法的并行化
 
 ### 线程池主要的任务处理流程
 
