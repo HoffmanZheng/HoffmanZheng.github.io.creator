@@ -231,11 +231,11 @@ Executors 工具类中提供的⼏个静态⽅法来创建线程池。⼤家到�
 
 在 [Java：并发编程实战](https://nervousorange.github.io/2021/java-concurrency/) 中介绍了无限制地创建线程将导致系统的不稳定性。虽然可以通过使用固定大小的线程池来解决这个问题，然而在高负载下如果新请求的到达速率超过了线程池的处理速率，请求会 **在队列中累计** 起来，应用程序仍可能耗尽资源。
 
-相比使用 newFixedThreadPool 和 newSingleThreadExecutor 默认的无界队列 `LinkedBlockingQueue`，使用有界队列如 `ArrayBlockingQueue` 可以有助于避免资源耗尽的情况发生。需要注意的是，只有当任务相互独立时，为线程池或工作队列设置界限才是合理的。如果任务之间存在依赖性，那么有界的线程池或队列就可能导致线程饥饿死锁问题。队列满后新到的任务将会根据饱和策略进行处理。有界队列的大小必须与线程池大小一起调节，如果线程池较小而队列较大，那么有助于减少内存使用量，降低 CPU 的使用率，同时还可以减少上下文切换，但付出的代码是可能会限制吞吐量。
+相比使用 newFixedThreadPool 和 newSingleThreadExecutor 默认的无界队列 `LinkedBlockingQueue`，使用有界队列如 `ArrayBlockingQueue` 可以有助于避免资源耗尽的情况发生。需要注意的是，只有当任务相互独立时，为线程池或工作队列设置界限才是合理的。如果任务之间存在依赖性，那么有界的线程池或队列就可能导致线程饥饿死锁问题。队列满后新到的任务将会根据饱和策略进行处理。有界队列的大小必须与线程池大小一起调节，如果线程池较小而队列较大，那么有助于减少内存使用量，降低 CPU 的使用率，同时还可以减少上下文切换，但付出的代价是可能会限制吞吐量。
 
 对于非常大或者无界的线程池（比如 newCachedThreadPool），可以通过使用 `SynchronousQueue` 来避免任务排队，它不是一个真正的队列（没有容量），而是一种在线程之间进行移交的机制。要将一个任务放入 SynchronousQueue 中，就必须有另一个线程正在等待这个任务，否则将会根据当前线程池的大小创建一个新的线程或者按照饱和策略拒绝掉这个任务。
 
-如果希望给线程池中的线程定制一些行为，例如指定一个 UncaughtExceptionHandler、给线程取一个更有意义的名称等，可以通过使用定制的线程工厂来实现：
+如果希望给线程池中的线程定制一些行为，例如指定一个 UncaughtExceptionHandler、给线程取一个更有意义的名称等，可以通过使用 **定制的线程工厂** 来实现：
 
 ```java
 public class MyThreadFactory implements ThreadFactory {
@@ -281,9 +281,42 @@ public class MyAppThread extends Thread {
 }
 ```
 
-// TODO
+在调用完 ThreadPoolExecutor 的构造函数后，仍然可以通过设置函数 Setter 来修改大多数参数，例如线程池的基本大小、最大大小、存活时间、线程工厂以及拒绝执行处理器，通过 Executors 创建的线程池可以将结果转为 ThreadPoolExecutor 以访问设置器。
+
+```java
+ExecutorService exec = Executors.newCachedThreadPool();
+if (exec instanceof ThreadPoolExecutor) {
+    ((ThreadPoolExecutor) exec).setCorePoolSize(10);
+} else {
+    throw new AssertionError("Oops, bad assuption");
+}
+```
+
+如果想要 **扩展** ThreadPoolExecutor 可以在子类中重写 afterExecute、beforeExecute 和 terminated 方法添加日志、计时、监视或统计信息收集的功能。无论任务是从 run 中正常返回还是抛出一个异常而返回，afterExecute 都会被调用。（如果任务在完成后带有一个 Error 或者未捕获的 RuntimeException，那么就不会调用 afterExecute。）如果 beforeExecute 抛出一个 RuntimeException，那么任务将不被执行，并且 afterExecute 也不会被调用。在线程池关闭时将调用 terminated，可以用来释放 Executor 在生命周期内分配的各种资源，还可以执行发送通知、记录日志或者收集 finalize 统计信息等操作。
 
 #### 递归算法的并行化
+
+当串行循环中的各个迭代操作之间 **彼此独立**，并且每个迭代操作执行的工作量比管理一个新任务时带来的开销更多，那么这个串行循环就适合并行化。
+
+```java
+// 串行循环
+void processSequentially(List<Element> elements) {
+ for (Element e : elements) {
+  process(e);
+ }
+}
+
+// 并行循环
+void processInParallel(Executor exec, List<Element> elements) {
+ for (final Element e : elements) {
+  exec.execute(new Runnable() {
+   public void run() { process(e); }
+  });
+ }
+}
+```
+
+如果想一次提交一组任务并等待它们完成，可以使用 ExecutorService.invokeAll，并使用 CompletionService 来获取结果。
 
 ### 线程池主要的任务处理流程
 

@@ -258,17 +258,142 @@ public class TrackingExecutor extends AbstractExecutorService {
 }
 ```
 
-# 活跃性、安全性与并发测试
+# 活跃性、并发的性能与测试
 
-### 线程安全性
+我们使用加锁机制来确保线程安全，但如果过度使用加锁，则可能导致 **锁顺序死锁**。同样我们使用线程池和信号量来限制对资源的使用，但它们可能会导致资源死锁。在数据库系统的设计中提供了 **主动监测死锁及从死锁中恢复**（选择一个牺牲者放弃事务，释放它持有的资源，详见 [Database：InnoDB 存储引擎](https://nervousorange.github.io/2021/database-innodb/)）的机制，但 Java 应用程序是 **无法** 从死锁中恢复过来的，因此在设计时就一定要排除可能导致死锁出现的条件。
 
 ### 避免活跃性危险
 
-### 并发性能与测试
+#### 死锁
+
+如果两个线程试图以 **不同的顺序** 来获得相同的锁，则可能会发生锁顺序死锁，如下图所示：
+
+![](/images/lock-ordering-deadlock.jpg)
+
+想要避免锁顺序死锁，需要对程序中的加锁行为进行全局分析，查看是否存在 **嵌套的锁获取** 操作。有时候看似能够控制锁顺序的代码依然没有避免死锁的发生，如下列的代码，如果一个线程从 X 向 Y 转账，另一个线程从 Y 向 X 转账，那么就有可能会发生死锁。
+
+~~~java
+public void transferMoney (Account fromAccount, Account toAccount, DollarAmount amount) 
+    throws InsufficientFundsException {
+    synchronized (fromAccount) {
+        synchronized (toAccount) {    // 嵌套的锁获取操作
+            if (fromAccount.getBalance().compareTo(amount) < 0) {
+                throw new InsufficientFundsException();
+            } else {
+                fromAccount.debit(amount);
+                toAccount.credit(amount);
+            }
+        }
+    }
+}
+~~~
+
+由于我们无法控制参数的顺序，因此必须在整个程序中定义锁的顺序，可以使用 `System.identityHashCode` 方法重新定义锁的顺序，来保证所有的线程 **以固定的顺序** 来获取锁：
+
+````java
+private static final Object tieLock = new Object();
+
+public void transferMoney (Account fromAccount, Account toAccount, DollarAmount amount) 
+    throws InsufficientFundsException {
+    class Helper {
+        public void transfer() throws InsufficientFundsException {
+            if (fromAccount.getBalance().compareTo(amount) < 0) {
+                throw new InsufficientFundsException();
+            } else {
+                fromAccount.debit(amount);
+                toAccount.credit(amount);
+            }
+        }
+    }
+    
+    int fromHash = System.identityHashCode(fromAccount);
+    int toHash = System.identityHashCode(toAccount);
+    
+    if (fromHash < toHash) {
+        synchronized (fromAccount) {
+            synchronized (toAccount) {
+                new Helper().transfer();
+            }
+        }
+    } else if (fromHash > toHash) {
+        synchronized (toAccount) {
+            synchronized (fromAccount) {
+                new Helper().transfer();
+            }
+        }
+    } else {
+        synchronized (tieLock) {          
+            // 极少情况拥有相同的散列值，加入另一个锁以保证串行
+            synchronized (fromAccount) {
+                synchronized (toAccount) {
+                    new Helper().transfer();
+                }
+            }
+        }
+    }
+}
+````
+
+在持有锁的时候调用某个外部方法也可能出现活跃性问题，如果在这个外部方法中可能会获取其他锁（可能导致锁顺序死锁），或者阻塞时间过长，导致其他线程无法及时获得当前被持有的锁。如果在调用某个方法时不需要持有锁，这种调用表被称为 **开放调用**。这种通过开放调用来避免死锁的方法，类似于采用封装机制来提供线程安全的方法，在分析的时候更为简单，更容易确保采用一致的顺序来获得锁。
+
+#### 死锁的避免与诊断
 
 
+如果一个程序每次至多只能获得一个锁，那么就不会产生锁顺序死锁。如果必须获取多个锁，在设计时必须考虑锁的顺序：尽量减少潜在的加锁交互数量，将获取锁时需要遵循的协议写入正式文档并始终遵循这些协议。
 
-# Java 对并发的支持
+还有一项技术可以检测死锁和从死锁中恢复过来，即使用显示锁中的 **定时 tryLock** 或者可轮询的锁，
+指定一个超时时限，在等待超过该时间后 tryLock 会返回一个失败信息，可以在发生死锁意外情况后释放自己持有的锁，让出系统的控制权。
+
+~~~~java
+public boolean transferMoney (Account fromAccount, Account toAccount, 
+                              DollarAmount amount, long timeout, TimeUnit unit) 
+    throws InsufficientFundsException, InterruptedException{
+    long stopTime = System.nanoTime() + unit.toNanos(timeout);
+    while (true) {
+        if (fromAccount.lock.tryLock()) {
+            try {
+                if (toAccount.lock.tryLock()) {
+                    try {
+                        if (fromAccount.getBalance().compareTo(amount) < 0 ) {
+                            throw new InsufficientFundsException();
+                        } else {
+                            fromAccount.debit(amount);
+                            toAccount.credit(amount);
+                            return true;
+                        }
+                    } finally {
+                        toAccount.lock.unlock();
+                    }
+                }
+            } finally {   // 获取 toAccount 锁失败，释放掉 fromAccount 锁
+                fromAccount.lock.unlock();
+            }
+        }
+        if (System.nanoTime() < stopTime) { return false; }   
+        // 在指定时间内不能获得所有需要的锁，返回失败的状态
+        NANOSECONDS.sleep(new Random().nextInt() % 1000);   
+        // 休眠一段时间，降低活锁发生的可能性
+    }
+}
+~~~~
+
+#### 其他活跃性危险
+
+1. 当线程由于无法访问它所需要的戏院而不能继续执行时，就发生了 **饥饿**，比如对线程的优先级使用不当，或者在持有锁时执行一些无法结束的结构（无限制地等待某个资源）。在 Thread API 中定义的线程优先级只是作为线程调度的参考，JVM 会根据需要将它们映射到操作系统的调度优先级，由操作系统的线程调度器尽力地提供公平的、活跃性良好的调度。尽量 **不要改变线程的优先级**，只要改变了线程的优先级，程序的行为就将与 **平台相关**，并且有导致发生饥饿问题的风险。
+
+2. **活锁** 是另一种形式的活跃性问题，虽然不会阻塞线程，但是线程将不断重复执行相同的操作，且总会失败。活锁通常是由过度的错误恢复代码造成的，当多个相互协作的线程都对彼此进行响应从而修改各自的状态，并使得任何一个线程都无法继续执行时，就发生了活锁。这就像两个过于礼貌的人在半路上面对面地相遇：他们彼此都让出对方的路，然后又在另一条路上相遇了，因此他们就这样反复地避让下去。要解决这种活锁问题，就需要 **在重试机制中引入随机性**，比如等待一段随机的时间再重试。
+
+### 性能与可伸缩性
+
+#### Amdahl 定律
+
+#### 线程引入的开销
+
+#### 减少锁的竞争
+
+### 并发程序的测试
+
+# 安全性与 Java 对并发的支持
 
 ### 显式锁与条件队列
 
