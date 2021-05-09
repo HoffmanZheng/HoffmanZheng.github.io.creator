@@ -446,9 +446,11 @@ synchronized 和 volatile 提供的内存可见性保证可能会使用特殊指
 
 在大多数情况下，内置锁都能很好地工作，但在功能上存在一些 **局限性**，例如无法中断一个正在等待获取锁的线程，或者无法在请求获取一个锁时无限地等待下去。Java 5.0 增加了 `ReentrantLock`，它提供了一种无条件的、可轮询的、定时的以及可中断的锁获取操作。
 
-**可定时的与可轮询的锁获取** 模式是由 tryLock 方法实现的，使用它可以有效避免死锁的发生（代码示例参见上文：死锁的避免与诊断）。使用定时锁时，如果不能在指定的时间内给出结果，那么就会使程序提前结束。当使用内置锁时，在开始请求锁后，这个操作将无法取消，因此内置锁将难以实现带有时间限制的操作。此外，`Lock.lockInterruptibly` 方法能够在获得锁的同时保持对中断的响应，实现一个可取消的加锁操作。
+**可定时的与可轮询的锁获取** 模式是由 tryLock 方法实现的，使用它可以有效避免死锁的发生（**代码示例参见上文**：死锁的避免与诊断）。使用定时锁时，如果不能在指定的时间内给出结果，那么就会使程序提前结束。当使用内置锁时，在开始请求锁后，这个操作将无法取消，因此内置锁将难以实现带有时间限制的操作。此外，`Lock.lockInterruptibly` 方法能够在获得锁的同时保持对中断的响应，实现一个可取消的加锁操作。
 
 相比 ReentrantLock 使用的保守且强硬的互斥锁，`ReadWriteLock` 提供了一种较为乐观的实现：一个资源可以被多个读操作访问，或者被一个写操作访问，但两者不能同时进行。读-写锁是一种性能优化措施，可以提高多处理器系统上被 **频繁读取** 的数据结构的性能（见下图），而在其他情况下，读-写锁的性能要比独占锁的性能要略差一些，因为它们的复杂性更高。
+
+【缺一张读写锁的图】
 
 ### 条件队列
 
@@ -510,6 +512,243 @@ public class ConditionBoundedBuffer<T> {
 
 ### AQS
 
-### CAS
+`AbstractQueuedSynchronizer` 抽象的队列式同步器，是许多同步类共同的基类，是一个用于 **构建锁和同步器的框架**，使用 AQS 可以简单且高效地构造出许多同步器，比如 ReentrantLock、CountDownLatch、Semaphore 等。AQS 解决了在实现同步器时涉及的大量细节问题，基于 AQS 构建同步器可以极大地 **减少实现工作**，而且也不必处理在多个位置上发生的竞争问题。
+
+![](/images/AQS.png)
+
+AQS 负责管理同步器类中的状态 `state`，它是一个整数类型的状态信息，可以用于表示 **任意状态**。例如，ReentrantLock 用它来表示所有者线程已经重复获取该锁的次数，Semaphone 用它表示剩余的许可数量，FutureTask 用它来表示任务的状态（尚未开始、正在运行、已完成以及已取消）。在同步器类中还可以自行管理一些额外的状态变量，比如 ReentrantLock 保存了锁的当前所有者信息，这样就能区分某个获取操作是重入的还是竞争的。
+
+```java
+// The synchronization state.  使用 volatile 保证线程可见性
+private volatile int state;
+
+// 返回当前的同步状态
+protected final int getState() { return state; }
+
+// 设置同步状态的值
+protected final void setState(int newState) { state = newState; }
+
+// 原子地（CAS）将同步状态设置为给定值 update，如果当前同步状态的值等于期望值 expect
+protected final boolean compareAndSetState(int expect, int update) {
+    // See below for intrinsics setup to support this
+    return unsafe.compareAndSwapInt(this, stateOffset, expect, update);
+}
+```
+
+#### 独占访问
+
+同时只能允许一个线程执行，例如 ReentrantLock，它的内部类分别实现了以公平（`FairSync`）或者非公平（`NonfairSync`）获取锁的方式：
+
+```java
+// 公平锁的同步对象
+static final class FairSync extends Sync {
+    private static final long serialVersionUID = -3000897897090466540L;
+
+    final void lock() { acquire(1); }
+
+	// 公平版本的 tryAcquire
+    protected final boolean tryAcquire(int acquires) {
+        final Thread current = Thread.currentThread();
+        int c = getState();
+        if (c == 0) {
+            // 和非公平锁相比，这里多了一个判断：是否有线程在等待
+            if (!hasQueuedPredecessors() &&
+                compareAndSetState(0, acquires)) {
+                setExclusiveOwnerThread(current);
+                return true;
+            }
+        }
+        else if (current == getExclusiveOwnerThread()) {
+            int nextc = c + acquires;
+            if (nextc < 0)
+                throw new Error("Maximum lock count exceeded");
+            setState(nextc);
+            return true;
+        }
+        return false;
+    }
+}
+```
+
+
+
+```java
+// 非公平锁的同步对象
+static final class NonfairSync extends Sync {
+    private static final long serialVersionUID = 7316153563782823691L;
+
+    // 和公平锁相比，这里会尝试使用 CAS 抢锁，成功就返回
+    final void lock() {
+        if (compareAndSetState(0, 1))
+            setExclusiveOwnerThread(Thread.currentThread());
+        else
+            acquire(1);
+    }
+
+    protected final boolean tryAcquire(int acquires) {
+        return nonfairTryAcquire(acquires); // 非公平的 tryAcquire
+    }
+}
+
+/** 
+  * Sync 类
+  * Performs non-fair tryLock.  tryAcquire is implemented in
+  * subclasses, but both need nonfair try for trylock method.
+*/
+final boolean nonfairTryAcquire(int acquires) {
+    final Thread current = Thread.currentThread();
+    int c = getState();
+    if (c == 0) {
+        // 没有判断队列中是否有线程在等待
+        if (compareAndSetState(0, acquires)) {
+            setExclusiveOwnerThread(current);
+            return true;
+        }
+    }
+    else if (current == getExclusiveOwnerThread()) {
+        int nextc = c + acquires;
+        if (nextc < 0) // overflow
+            throw new Error("Maximum lock count exceeded");
+        setState(nextc);
+        return true;
+    }
+    return false;
+}
+```
+
+总结：公平锁和非公平锁只有两处不同：
+
+1. 非公平锁在调用 lock 后，首先就会调用 CAS 进行一次抢锁，如果这个时候恰巧锁没有被占用，那么直接就获取到锁返回了。
+2. 非公平锁在 CAS 失败后，和公平锁一样都会进入到 tryAcquire 方法，在 tryAcquire 方法中，如果发现锁这个时候被释放了（state == 0），非公平锁会直接 CAS 抢锁，但是公平锁会 **判断等待队列是否有线程处于等待状态**，如果有则不去抢锁，乖乖排到后面。
+
+公平锁和非公平锁就这两点区别，如果这两次 CAS 都不成功，那么后面非公平锁和公平锁是一样的，**都要进入到阻塞队列等待唤醒**。相对来说，非公平锁会有更好的性能，因为它的吞吐量比较大。当然，非公平锁让获取锁的时间变得更加不确定，可能会导致在阻塞队列中的线程长期处于 **饥饿** 状态。
+
+#### 共享访问
+
+共享访问指多个线程可同时执行，如 Semaphone、CountDownLatch、CyclicBarrier、ReadWriteLock 等。
+
+相比 synchronized 和 ReentrantLock 同时只能允许一个线程访问某个资源，`Semaphone` 可以指定多个线程同时访问某个资源，它管理了一组虚拟的许可，它默认构造 AQS 的 state 为 permits。当执行任务的线程数量超出 permits，那么多余的线程将会被放入阻塞队列 Park,并自旋判断 state 是否大于 0。只有当 state 大于 0 的时候，阻塞的线程才能继续执行，此时先前执行任务的线程继续执行 release 方法，release 方法使得 state 的变量会加 1，那么自旋的线程便会判断成功。如此，每次只有最多不超过 permits 数量的线程能自旋成功，便 **限制了执行任务线程的数量**。
+
+`CountDownLatch` 允许 count 个线程阻塞在一个地方，**直至所有线程的任务都执行完毕**。CountDownLatch 也是共享锁的一种实现，它默认构造 AQS 的 state 值为 count。当线程使用 countDown() 方法时,其实使用了tryReleaseShared 方法以 CAS 的操作来减少 state，直至 state 为 0 。当调用 await() 方法的时候，如果 state 不为 0，那就证明任务还没有执行完毕，await() 方法就会一直阻塞，也就是说 await() 方法之后的语句不会被执行。CountDownLatch 会自旋 CAS 判断 state == 0，如果 state == 0 的话，就会释放所有等待的线程，await() 方法之后的语句得到执行。
+
+`CyclicBarrier` 和 CountDownLatch 非常类似，它也可以实现线程间的技术等待，但是它的功能比CountDownLatch 更加复杂和强大。CyclicBarrier 默认的构造方法是 CyclicBarrier(int parties)，其参数表示 **屏障拦截的线程数量**，每个线程调用 await 方法告诉 CyclicBarrier 我已经到达了屏障，然后当前线程被阻塞。CyclicBarrier 内部通过一个 count 变量作为计数器，count 的初始值为 parties 属性的初始化值，每当一个线程到了栅栏这里了，那么就将计数器减一。如果 count 值为 0 了，表示最后一个线程到达栅栏，就尝试执行我们构造方法中输入的任务。CountDownLatch 是计数器，线程完成一个记录一个，只不过计数不是递增而是递减，而 CyclicBarrier 更像是一个阀门，需要所有线程都到达，阀门才能打开，然后继续执行。
+
+### 非阻塞同步机制
+
+#### 锁的劣势
+
+虽然使用锁可以确保数据在并发访问中的一致性，但独占锁是一项 **悲观** 技术，如果有多个线程同时请求锁，那么一些线程将被挂起并且在稍后恢复运行。当线程恢复执行时，还必须等待其他线程执行完它们的时间片以后，才能被调度执行。在挂起和恢复线程等过程中存在着很大的开销，并且通常存在着较长时间的 **中断**。
+
+锁定还存在其他一些缺点。当一个线程正在等待锁时，它 **不能做任何其他事情**。如果一个线程在持有锁的情况下被延迟执行（例如发生了缺页错误、调度延迟，或者其他类似情况），那么所有需要这个锁的线程都无法执行下去。如果被阻塞线程的优先级较高，而持有锁的线程优先级较低，就会产生 **优先级反转**。即使高优先级的线程可以抢先执行，但仍然需要等待锁被释放，从而导致它的优先级会降至低优先级线程的级别。如果持有锁的线程被永久地阻塞（例如由于出现了无限循环，死锁，活锁或者其他的活跃性故障），所有等待这个锁的线程就永远无法执行下去。
+
+#### CAS 与原子变量
+
+与基于锁的方案相比，非阻塞算法使用 **底层的原子机器指令**，在设计和实现上都要复杂得多，但它们在可伸缩性和活跃性上却拥有巨大的优势。由于非阻塞算法可以使多个线程在竞争相同的数据时不会发生阻塞，因此它能在粒度更细的层次上进行协调，并且极大地减少调度开销。而且在非阻塞算法中不存在死锁和其他活跃性问题。
+
+在针对多处理器操作而设计的处理器中提供了一些特殊指令，用于管理对共享数据的并发访问。在早期的处理器中支持原子的测试并设置（Test-and-Set），获取并递增（Fetch-and-Increment）以及交换等指令，这些指令足以实现各种互斥体，而这些互斥体又可以实现一些更复杂的并发对象。现在几乎所有的现代处理器中都包含了某种形式的 **原子读-改-写指令**，例如比较并交换（Compare-and-Swap）或者关联加载/条件存储（Load-Linked/Store-Conditional）。操作系统和 JVM 使用这些指令来实现锁和并发的数据结构。
+
+当多个线程尝试使用 CAS 同时更新同一个变量时，只有其中一个线程能更新变量的值，其他线程都将失败。然而，失败的线程并 **不会被挂起**，而是被告知在这次竞争中失败，并可以再次尝试。由于一个线程在竞争 CAS 时失败不会阻塞，因此它可以决定是否重新尝试，或者执行一些恢复操作，或者不执行任何操作。这种灵活性就大大减少了与锁相关的活跃性风险。
+
+原子变量比锁的 **粒度更细，量级更轻**，它将发生竞争的范围缩小到单个变量上。在使用基于原子变量而非锁的算法中，因为不需要挂起或重新调度线程，线程在执行时不易出现延迟，并且如果遇到竞争，也更容易恢复过来。下图给出了在适度/高度竞争的情况下使用锁和原子变量的吞吐量情况。可以看出，在高度竞争的情况下，锁的性能将超过原子变量的性能，但在更真实的竞争情况下，
+原子变量的性能将超过锁的性能。这是因为锁在发生竞争时会挂起线程，从而降低了 CPU 的使用率和共享内存总线上的同步通信量。另一方面，如果使用原子变量，那么发出调用的类负责对竞争进行管理，如果在遇到竞争时立即重试，会导致在激烈竞争的环境下产生更多的竞争。（这就好比在交通拥堵时，交通信号灯能够实现较高的吞吐量；而在低拥堵时，环岛能实现更高的吞吐量。）
+
+![](/images/AtomicInteger.jpg)
+
+可能有人会觉得原子变量的性能比锁更糟糕，但上图中的高度竞争程度其实有点 **不切实际**。任何一个真实的程序都不会除了竞争锁或原子变量，其他什么工作都不做。在实际情况中，原子变量在可伸缩性上要高于锁，因为在应对常见的竞争程度时，原子变量的效率会更高。锁和原子变量在不同竞争程度上的性能差异很好地说明了各自的优势和劣势。在中低程度的竞争下，原子变量能提供更高的可伸缩性，而在高强度的竞争下，锁能够更有效地 **避免竞争**。
+
+#### 非阻塞算法
+
+如果在某种算法中，一个线程的失败或挂起不会导致其他线程也失败或挂起，那么这种算法就被称为非阻塞算法。如果在算法的每个步骤中都存在某个线程能够执行下去，那么这种算法也被称为 **无锁算法**。在非阻塞算法中通常不会出现死锁和优先级反转问题（但可能会出现饥饿和活锁问题，因为在算法中会反复地重试）。
+
+在实现相同功能的前提下，非阻塞算法通常比基于锁的算法更为复杂。创建非阻塞算法的关键在于，如何 **将原子修改的范围缩小到单个变量上**，同时还要维护数据的一致性。栈是最简单的链式数据结构：每个元素仅指向一个元素，并且每个元素也只被一个元素引用。下列代码示例了如何通过原子引用构建线程安全的 ConcurrentStack，可以看出非阻塞算法的特性：如果某项工作的完成具有不确定性，必须重新执行。
+
+~~~java
+public class ConcurrentStack<E> {
+	AtomicReference<Node<E>> top = new AtomicReference<Node<E>>(); 
+
+	public void push (E item) {
+ 		Node<E> newHead = new Node<E>(item);
+		Node<E> oldHead;
+		do {
+			oldHead = top.get();
+			newHead.next = oldHead;
+		} while(!top.compareAndSet(oldHead, newHead));  
+		/** 如果在开始插入节点时，位于栈顶的节点没有发生变化，那么 CAS 就会成功；
+		如果栈顶节点发生了变化（其他线程插入或者删除了元素），
+		那么 CAS 将会失败，而 push 方法会根据栈的当前状态更新节点，并且再次尝试。**/
+	}
+
+	public E pop() {
+		Node<E> oldHead;
+		Node<E> newHead;
+		do {
+			oldHead = top.get();
+			if (oldHead == null) { return null; }
+			newHead = oldHead.next;
+		} while (!top.compareAndSet(oldHead, newHead));
+		return oldHead.item;
+	}
+
+	private static class Node<E> {
+		public final E item;
+		public Node<E> next;
+
+		public Node(E item) {
+			this.item = item;
+		}
+	}
+}
+~~~
+
+非阻塞算法在栈中的实现很容易，但对于一些更复杂的数据结构，例如队列、散列表或数，则要复杂得多。下列代码展示了 Michael-Scott 提出的非阻塞链表算法（ConcurrentLinkedQueue 中使用的正是该算法），在初始化时就将头节点和尾节点都指向哑节点，当插入一个新的元素时，**需要更新两个指针**。首先更新当前最后一个元素的 next 指针，将新节点链接到列表队尾，然后更新尾节点，将其指向这个新元素。如果第一个 CAS 成功，但第二个 CAS 失败，那么链表将处于不一致的状态，即使这两个 CAS 都成功了，仍有可能有另外一个线程在两个操作之间访问这个链表。
+
+~~~java
+public class LinkedQueue<E> {
+	// 非阻塞链表算法中的插入算法
+	private static class Node<E> {
+ 		final E item;
+		final AtomicReference<Node<E>> next;
+
+		public Node(E item, Node<E> next) {
+			this.item = item;
+			this.next = new AtomicReference<Node<E>>(next);
+		}
+	}
+
+	private final Node<E> dummy = new Node<E>(null, null); 
+	// 空链表 dummy 哑节点，等同于 sentinel 哨兵节点
+	private final AtomicReference<Node<E>> head = new AtomicReference<Node<E>>(dummy);
+	private final AtomicReference<Node<E>> tail = new AtomicReference<Node<E>>(dummy);
+
+ 	public boolean put(E item) {
+ 		Node<E> newNode = new Node<E>(item, null);
+		while(true) {
+			Node<E> curTail = tail.get();
+			Node<E> tailNext = curTail.next.get();
+			if (curTail == tail.get()) {  
+				if (tailNext != null) {  
+				// 检查链表是否处于中间状态
+					tail.compareAndSet(curTail, tailNext);
+					// 链表处于中间状态（另一个线程正在插入元素），帮助结束其他线程执行的插入元素操作，然后循环重试
+				} else {   // 链表处于稳定状态
+					if (curTail.next.compareAndSet(null, newNode)) {  
+					// 如果其他线程插队，CAS 失败，会重新进入 while 循环重试
+						tail.compareAndSet(curTail, newNode);
+						// 第二步 CAS 如果失败，表示这一步已经由其他线程代为完成
+						return true;
+					}
+				}
+			}
+		}
+	}
+}
+~~~
+
+实现非阻塞算法的链表的关键点在于：当队列处于稳定状态时（下图 15-5），尾节点的 next 域将为空，如果队列处于中间状态，那么 tail.next 将为非空。因此，任何线程都能通过 **检查 tail.next 来获取链表当前的状态**。而且，当链表处于中间状态时，可以通过将尾节点向前移动一个节点，从而结束其他线程正在执行的插入元素操作，并使得链表恢复为稳定状态。
+
+【缺非阻塞算法链表过程状态图】
+
+在使用 CAS 实现非阻塞算法时，可能会遇到 ABA 问题，即 V 的值首先由 A 变成 B，再由 B 变成 A，却仍然被认为是失败，需要重新执行算法中的某些步骤。对此可以选择同时更新两个值，一个引用和一个版本号，通过在引用上加上 "版本号" 来避免 ABA 问题。
 
 ### Java 内存模型
+
