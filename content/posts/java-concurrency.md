@@ -450,7 +450,7 @@ synchronized 和 volatile 提供的内存可见性保证可能会使用特殊指
 
 相比 ReentrantLock 使用的保守且强硬的互斥锁，`ReadWriteLock` 提供了一种较为乐观的实现：一个资源可以被多个读操作访问，或者被一个写操作访问，但两者不能同时进行。读-写锁是一种性能优化措施，可以提高多处理器系统上被 **频繁读取** 的数据结构的性能（见下图），而在其他情况下，读-写锁的性能要比独占锁的性能要略差一些，因为它们的复杂性更高。
 
-【缺一张读写锁的图】
+![](/images/readWriteLock.jpg)
 
 ### 条件队列
 
@@ -746,9 +746,111 @@ public class LinkedQueue<E> {
 
 实现非阻塞算法的链表的关键点在于：当队列处于稳定状态时（下图 15-5），尾节点的 next 域将为空，如果队列处于中间状态，那么 tail.next 将为非空。因此，任何线程都能通过 **检查 tail.next 来获取链表当前的状态**。而且，当链表处于中间状态时，可以通过将尾节点向前移动一个节点，从而结束其他线程正在执行的插入元素操作，并使得链表恢复为稳定状态。
 
-【缺非阻塞算法链表过程状态图】
+![](/images/LinkedQueue.jpg)
 
 在使用 CAS 实现非阻塞算法时，可能会遇到 ABA 问题，即 V 的值首先由 A 变成 B，再由 B 变成 A，却仍然被认为是失败，需要重新执行算法中的某些步骤。对此可以选择同时更新两个值，一个引用和一个版本号，通过在引用上加上 "版本号" 来避免 ABA 问题。
 
 ### Java 内存模型
 
+#### 内存可见性与重排序
+
+在编译器中生成的指令顺序，可以与源代码中的 **顺序不同**，此外编译器还会把变量保存在 **寄存器** 而不是内存中；处理器可以采用乱序或并行的方法来执行指令；缓存可能会改变将写入变量提交到主内存的次序，而且，保存在 **处理器本地缓存** 中的值，对于其他处理器是不可见的。这些因素都会使得一个线程无法看到变量的最新值，并且会导致其他线程中的内存操作似乎在乱序执行——如果没有使用正确的同步。
+
+这些底层技术可以提高程序的执行速度，在单线程环境中不会产生其他影响。在多线程环境中，当多个线程要共享数据时，必须协调它们之间的操作。JVM 依赖程序通过同步操作来找出这些协调操作将在何时发生，并导致很大的性能开销。JMM 规定了 JVM 必须遵守一组**最小保证**，这组保证规定了对变量的写入操作在何时将对于其他线程可见。JMM 在设计时就在可预测性和程序的易于开发性之间进行了权衡，从而在各种主流的处理器体系架构上能实现高性能的 JVM。
+
+在大多数时间里，是没有必要确保每个处理器能够知道其他处理器正在进行的工作，因此处理器会适当放宽存储一致性保证，以换取性能的提升。在架构定义的内存模型中将告诉应用程序可以从内存系统中获得怎样的保证，此外还定义了一些特殊的指令（称为 **内存栅栏**），当需要共享数据时，这些指令就能实现额外的存储协调保证。为了使 Java 开发人员无须关心不同架构上内存模型之间的差异，Java 还提供了自己的内存模型，并且 JVM 通过在适当的位置上插入内存栅栏来屏蔽在 JMM 与底层平台内存模型之间的差异。
+
+调度器可能会采用不恰当的方式来交替执行不同线程的操作，JMM 还使得不同线程看到的操作执行顺序是不同的，各种使操作延迟或者看似乱序执行的不同原因，都可以归为 **重排序**。在没有正确同步的情况下，即使要推断最简单的并发程序的行为也很困难。比如下列的 `PossibleReordering` 可能会输出 （1，0）或（0，1）或（1，1）：线程 B 可以在线程 A 开始之前执行完成，线程 A 也可以在线程 B 开始之前就执行完成，或者二者的操作交替执行。
+
+~~~~java
+public class PossibleReordering {
+	static int x = 0, y = 0;
+	static int a = 0, b = 0;
+ 
+	public static void main(String[] args) throws InterruptedException {
+		Thread one = new Thread(new Runnable() {
+			public void run() {
+				a = 1;
+				x = b;
+			}
+		});
+	Thread other = new Thread(new Runnable() {
+		public void run() {
+			b = 1;
+			y = a;
+		}
+	});
+	one.start(); other.start();
+	one.join(); other.join();
+	System.out.println("(" + x + "," + y + ")");
+	}
+}
+~~~~
+
+奇怪的是，PossibleReordering 还可以输出（0,0）。下图给出了导致这种情况的重排序过程。如果没有同步，那么推断出执行顺序将是非常困难的，而要确保在程序中正确地使用同步却是非常容易的。同步将 **限制编译器、运行时和硬件对内存操作重排序** 的方式，从而在实施重排序时不会破坏 JMM 提供的可见性保证。
+
+![](/images/reordering.jpg)
+
+#### Java 内存模型
+
+JMM 为程序中所有的操作定义了一个偏序关系，称之为 `Happens-Before`。要想保证执行操作 B 的线程看到操作 A 的结果（无论 A 和 B 是否在同一个线程中执行），那么在 A 和 B 之间必须满足 Happens-Before 关系。如果两个操作之间缺乏 Happens-Before 关系，那么 JVM 可以对它们任意地重排序。
+
+> Happens-Before 的规则包括：
+>
+> 程序顺序规则：如果程序中操作 A 在操作 B 之前，那么在线程中 A 操作将在 B 操作之前执行。
+>
+> 监视器锁规则：在监视器锁上的解锁操作必须在同一个监视器锁上的加锁操作之前执行。
+>
+> volatile 变量规则：对 volatile 变量的写入操作必须在对该变量的读操作之前执行。
+>
+> 线程启动规则：在线程上对 Thread.start 的调用必须在该线程中执行任何操作之前执行。
+>
+> 线程结束规则：线程中的任何操作都必须在其他线程检测到该线程已经结束之前执行，或者从 Thread.join 中成功返回，或者在调用Thread.isAlive 时返回 false。
+>
+> 中断规则：当一个线程在另一个线程上调用 interrupt 时，必须在被中断线程检测到 interrupt 调用之前执行（通过抛出 InterruptedException, 或者调用 isInterrupted 和 interrupted）。
+>
+> 终结器规则：对象的构造函数必须在启动该对象的终结器之前执行完成。
+>
+> 传递性：如果操作 A 在操作 B 之前执行，并且操作 B 在操作 C 之前执行，那么操作 A 必须在操作 C 之前执行。
+
+当两个线程使用同一个锁进行同步时，它们之间的 Happens-Before 关系如下图所示。由于 A 释放了锁 M，并且 B 随后获得了锁 M，因此 A 中所有在释放锁之前的操作，也就位于 B 中请求锁之后的所有操作之前。如果这两个线程是在 **不同的锁** 上进行同步的，那么久不能推断它们之间的动作顺序，因为在这两个线程的操作之间并不存在 Happens-Before 关系。
+
+![](/images/happens-before.jpg)
+
+由于 Happens-Before 的排序功能很强大，因此有时候可以 "**借助**" 现有同步机制的可见性属性。在 FutureTask 中就说明了如何使用这种 "借助" 技术，它自己维护了计算的结果，当一个线程调用 set 来保存结果并且另一个线程调用 get 来获取该结果时，这两个线程最好按照 Happens-Before 进行排序。这可以通过将执行结果的引用声明为 volatile 类型来实现，但利用现有的同步机制可以更容易地实现相同的功能。下列为保存和获取 result 时调用的 innerGet 与 innerSet 方法：
+
+~~~~java
+private final class Sync extends AbstractQueuedSynchronizer {
+	private static final int RUNNING = 1, RAN =2, CANCELLED = 4;
+	private V result;
+	private Exception exception;
+ 
+	void innerSet(V v) {
+		while(true) {
+			int s = getState();
+			if (ranOrCancelled(s)) { return; }
+			if (compareAndSetState(s, RAN)) { break; }
+		}
+		result = v;
+		releaseShare(0);  // 在 tryReleaseShared 之前写入 result
+		done();
+	}
+ 
+	// 通过在 tryReleaseShared 之前写入 result，在 acquireShared 之后读取 result，
+	// 来确保 innerSet 中的写入操作会在 innerGet 中的读取操作之前执行
+	V innerGet() throws InterruptedException, ExecutionException {
+		acquireSharedInterruptibly(0);  // 在 acquireShared 之后读取 result
+		if (getState() == CANCELLED) { throw new CancellationException(); }
+		if (exception != null) { throw new ExecutionException(exception); }
+		return result;
+	}
+}
+~~~~
+
+上述代码使用了一种现有的 Happens-Before 顺序来确保对象的可见性，所以被称为 "借助"。这项技术很 **容易出错**，因此要谨慎使用，只有当需要最大限度地提升某些类（例如 ReentrantLock）的性能时，才应该使用这项技术。在类库中提供的其他 Happens-Before 排序包括：
+* 将一个元素放入一个线程安全容器的操作将在另一个线程从该容器中获得这个元素的操作之前执行。
+* 在 CountDownLatch 上的倒数操作将在线程从闭锁上的 await 方法中返回之前执行。
+* 释放 Semaphone 许可的操作将在从该 Semaphone 上获得一个许可之前执行。
+* Future 表示的任务的所有操作将在从 Future.get 中返回之前执行。
+* 向 Executor 提交一个 Runnable 或 Callable 的操作将在任务开始执行之前执行。
+* 一个线程到达 CyclicBarrier 或 Exchanger 的操作将在其他到达该栅栏或交换点的线程被释放之前执行。如果 CyclicBarrier使用一个栅栏操作，那么到达栅栏的操作将在栅栏操作之前执行，而栅栏操作又会在线程从栅栏中释放之前执行。
