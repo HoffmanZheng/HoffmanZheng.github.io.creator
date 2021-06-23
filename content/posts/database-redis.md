@@ -359,10 +359,10 @@ clusterNode 结构中的 slots 属性和 numslot 属性记录了节点负责处�
 
 ```C
 struct clusterNode {
- // ...
- unsigned char slots[15384/8];
- int numslot;
- // ...
+	// ...
+	unsigned char slots[15384/8];
+	int numslot;
+	// ...
 }
 ```
 
@@ -372,9 +372,9 @@ slots 属性是一个二进制数组，长度为 16384/8 = 2048 个字节，共�
 
 ```C
 typedef struct clusterState {
- // ...
- clusterNode *slots[16384];
- // ...
+	// ...
+	clusterNode *slots[16384];
+	// ...
 }
 ```
 
@@ -401,6 +401,81 @@ Redis 集群中，主节点用于处理槽，从节点用于复制某个主节�
 
 ### 发布与订阅
 
+客户端可以订阅一个或多个频道，每当有其他客户端向被订阅的频道发送消息时，频道的所有订阅者都会收到这条消息。此外客户端还可以通过 `PSUBSCRIBE` 订阅一个或多个模式，从而接收所有与模式匹配的频道的消息。如下图所示：
+
+![](/images/redis-subscribe.jpg)
+
+Redis 将所有频道的订阅关系都保存在服务器状态的 `pubsub_channels` 字典里面，键为某个被订阅的频道，值是一个链表，里面记录了所有订阅这个频道的客户端。类似地，所有模式的订阅关系都保存在服务器状态的 `pubsub_patterns` 属性里面，它也是一个链表，里面记录了客户端与其订阅的模式，如下图所示：
+
+![](/images/redis-multi-queue.jpg)
+
+当一个 Redis 客户端执行 `PUBLISH <channel> <message>` 命令将消息发送给频道时，服务器会将消息 message 发送给频道所有的订阅者，并发送给所有与 channel 匹配的模式的订阅者。PUBLISH 命令将在 pubsub_channels 字典中查找键为 channel 对应的链表值，然后遍历链表将消息发送给频道所有的订阅者。
+
+至于模式订阅者，PUBLISH 命令会遍历整个 pubsub_patterns 链表，查找那些与 channel 频道相匹配的模式，
+并将消息发送给订阅了这些模式的客户端，其伪代码如下所示：
+
+~~~C
+def pattern_public(channel, message) :
+
+ # 遍历所有模式订阅消息
+ for pubsubPattern in server.pubsub_patterns:
+ 
+  # 如果频道和模式相匹配
+  if match (channel, pubsubPattern.pattern):
+  
+   # 那么将消息发送给订阅该模式的客户端
+   send_message(pubsubPattern.client, message)
+~~~
+
 ### 事务
 
-### 排序
+Redis 事务提供了一种将多个命令请求打包，然后一次性、按顺序地执行多个命令的机制，并且在事务执行期间，服务器 **不会中断事务** 而改去执行其他客户端的命令请求，它会将事务中的所有命令都执行完毕，然后才去处理其他客户端的命令请求。以下是一个 Redis 事务执行的过程：
+
+~~~powershell
+redis> MULTI
+OK
+
+redis> SET "name" "Practical Common Lisp"
+QUEUED
+
+redis> GET "name"
+QUEUED
+
+redis> SET "author" "Peter Seibel"
+QUEUED
+
+redis> GET "auther"
+QUEUED
+
+redis> EXEC
+1) OK
+2) "Practical Common Lisp"
+3) OK
+4) "Peter Seibel"
+~~~
+
+`MULTI` 命令的执行标志着事务的开始，当一个客户端切换到事务状态之后，服务器会根据这个客户端发来的不同命令执行不同的操作：如果客户端发送的命令为 EXEC、DISCARD、WATCH、MULTI 四个命令的其中一个，那么服务器立即执行这个命令；相反，如果是这四个命令以外的其他命令，那么服务器并不立即执行这个命令，而是将这个命令放入一个 FIFO 事务队列里面，然后向客户端返回 `QUEUED` 回复，其具体逻辑如下图所示：
+
+![](/images/redis-multi.jpg)
+
+当一个处于事务状态的客户端向服务器发送 `EXEC` 命令时，这个 EXEC 命令将被立即执行，服务器会遍历这个客户端的事务队列，执行队列中保存的所有命令，最后将执行命令所得的结果全部返回给客户端。
+
+#### WATCH 命令的实现
+
+`WATCH` 命令是一个乐观锁的实现，它可以在 EXEC 命令执行之前监视任意数量的数据库键，并在 EXEC 命令执行时，检查被监视的键是否至少有一个已经被修改过了，如果是的话，服务器将 **拒绝执行事务**，并向客户端返回代表执行失败的空回复。
+
+每个 Redis 数据库都保存着一个 watched_keys 字典，字典的键是被 WATCH 监视的数据库键，而字典的值是一个链表，记录了所有监视相应数据库键的客户端。所有对数据库进行修改的命令，比如 SET、LPUSH、SADD、ZREM、DEL、FLUSHDB 等等，在执行之后都会调用 multi.c/touchWatchKey 函数对 watched_keys 字典进行检查，如果有客户端正在监视刚刚被命令修改过的数据库键，那么 touchWatchKey 函数会将链表中客户端的 `REDIS_DIRTY_CAS` 标识打开，标识该客户端的事务安全性已经被破坏。
+
+当接收到客户端发来的 EXEC 命令时，服务器会根据这个客户端是否打开了 REDIS_DIRTY_CAS 标识来决定是否执行事务：
+
+![](/images/redis-watch.jpg)
+
+#### 事务的 ACID 性质
+
+Redis 的事务具有原子性，可以将事务中的多个操作当做一个整体来执行，服务器要么执行事务中的所有操作，要么就一个操作也不执行。与传统关系型数据库的最大区别是，Redis **不支持事务回滚** 机制，即使事务队列中的某个命令在执行期间出现了错误，整个事务也会继续执行下午，直到将事务队列中的所有命令都执行完毕为止。
+
+Redis 通过谨慎的错误检测和简单的设计来保证事务的一致性，比如在事务入队命令的过程中，如果出现命令不存在或者命令格式不正确等，错误的命令不会被入队；事务在执行的过程中发生错误，出错的命令 **不会** 对数据库做任何修改，也不会中断事务的执行，服务器会继续执行事务中余下的其他命令，并且已执行的命令不会被出错的命令影响。
+
+因为 Redis 使用 **单线程** 的方式来执行事务（以及事务队列中的命令），并且服务器保证，在执行事务期间不会对事务进行中断，因此，Redis 的事务总是以串行的方式运行的，并且事务也总是具有隔离性的。
+
+当服务器在无持久化的内存模式下运行时，事务不具有耐久性；当运行在 RDB 模式下时，服务器只会在特定的保存条件被满足时，才会执行 BGSAVE 命令，因此也不具有耐久性；当运行在 AOF 模式下时，并且 appendfsync 选项的值为 always 时，事务才是具有耐久性的。虽然可以在事务的最后加上 SAVE 命令来保证事务的耐久性，但这种做法效率太低，并不具有实用性。
