@@ -136,7 +136,23 @@ Spring 可以处理不同形式的 BeanDefinition，由于这里使用的是XML�
 
 ![](/images/spring-loadBeanDefinition.png)
 
-AbstractBeanDefinitionReader 会委托 `ResourceLoader` 来获取 BeanDefinition 的 Resource，随后调用的 `loadBeanDefinitions(Resource res)` 在 BeanDefinitionReader 中是一个接口方法，具体的实现在 XmlBeanDefinitionReader 中。这个 Resource 对象封装了对XML文件的 IO 操作，所以读取器可以在打开 IO 流后得到 XML 的文件对象。有了这个 Document 对象以后，就可以按照 Spring 的Bean 定义规则来对这个 XML 的文档树进行解析和注册了。
+AbstractBeanDefinitionReader 会委托 `ResourceLoader` 来获取 BeanDefinition 的 Resource，
+随后调用的 `loadBeanDefinitions(Resource res)` 在 BeanDefinitionReader 中是一个接口方法，
+具体的实现在 XmlBeanDefinitionReader 中。这个 Resource 对象封装了对 XML文件的 IO 操作，
+读取器会在读取后委托 DefaultDocumentLoader 执行 **通用的 XML 解析** 获取 Document 对象，
+随后在 registerBeanDefinitions(doc, resource) 中就可以按照 Spring 的 Bean 定义规则来对这个 XML 的文档树进行解析并转化为容器内部的数据结构了（这一步实现委托给了 DefaultBeanDefinitionDocumentReader）。
+
+具体的 Spring BeanDefinition 的解析是在 `BeanDefinitionParserDelegate` 中完成的，这个类里包含了各种 Spring Bean 定义规则的处理。id、name、aliase 等属性元素的值会被从 XML 文件相应的元素的属性中读取出来，然后被设置到生成的 `BeanDefinitionHolder` 中去，其他的属性比如 beanClass、description、lazyInit 等也会在这里被处理。经过逐层地解析，在 XML 文件中定义的 BeanDefinition 就被整个给载入到了 IoC 容器中，并在容器中建立了数据映射。IoC 容器至此大致完成了管理 Bean 对象的 **数据准备** 工作（或者说是初始化过程）。但是重要的依赖注入实际上在这个时候还没有发生，要完全发挥容器的作用，还需完成数据向容器的注册。
+
+![](/images/spring-BeanDefinitionReader.png)
+
+向容器中注册 Bean 即是将 beanName 与 BeanDefinition 的映射关系写入到 DefaultListableBeanFactory 内部的哈希表中。如果遇到同名的 BeanDefinition，进行处理的时候需要依据 allowBeanDefinitionOverriding 的配置来完成。完成注册后，BeanDefinition 就可以被容器使用了，这些信息是容易建立依赖反转的基础。
+
+#### IoC 容器的依赖注入
+
+####  容器的其他特性
+
+
 
 ### Spring AOP 的实现
 
@@ -150,5 +166,5 @@ AbstractBeanDefinitionReader 会委托 `ResourceLoader` 来获取 BeanDefinition
 
 
 
-### Spring 事物处理的实现
+### Spring 事务处理的实现
 
