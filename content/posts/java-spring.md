@@ -150,6 +150,18 @@ AbstractBeanDefinitionReader 会委托 `ResourceLoader` 来获取 BeanDefinition
 
 #### IoC 容器的依赖注入
 
+依赖注入的过程通常是用户第一次向 IoC 容器索要 Bean 时触发的，也就是 BeanFactory 的 getBean
+接口，其具体实现在 AbstractBeanFactory 中：
+
+![](/images/spring-getBean.png)
+
+对于 IoC 容器的使用，Spring 提供了许多参数的配置，每一个参数配置实际上代表了一个 IoC 
+容器的实现特性，这些特性的实现很多都需要在依赖注入的过程中或者对 Bean 
+进行生命周期管理的过程中来完成
+
+createBean 不但生成了需要的 Bean，还对 Bean 初始化进行了处理，比如实现了在 BeanDefinition
+中的 init-method 属性定义，Bean 后置处理器的实现，等等
+
 ####  容器的其他特性
 
 

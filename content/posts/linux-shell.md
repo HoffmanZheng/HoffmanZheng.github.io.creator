@@ -3,7 +3,7 @@ title: "Linux 命令行与 Shell 脚本编程大全"
 author: "Chenghao Zheng"
 tags: ["tools"]
 categories: ["Reading notes"]
-date: 2021-08-27T18:19:47+01:00
+date: 2022-08-27T18:19:47+01:00
 draft: false
 ---
 
