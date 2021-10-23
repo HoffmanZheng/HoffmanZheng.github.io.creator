@@ -1,4 +1,4 @@
-baseURL = "https://nervousorange.github.io/"
+baseURL = "https://hoffmanzheng.github.io/"
 languageCode = "en-us"
 title = "人间一场大梦"
 theme = "LeaveIt"
@@ -58,7 +58,7 @@ preserveTaxonomyNames = true
     license= '本文采用 <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/" target="_blank">知识共享署名-非商业性使用 4.0 国际许可协议</a> 进行许可'
 
 [params.social]
-    GitHub = "NervousOrange"
+    GitHub = "HoffmanZheng"
     Email   = "zch693922442@outlook.com"
 #    Wechat = "/images/me/wechatlink.jpg"  # Wechat QRcode image
 #    Telegram = "xxoo"

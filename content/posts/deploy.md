@@ -33,7 +33,7 @@ draft: false
 	<!-- automatically creates the classpath using all project dependencies,
           also adding the project build directory -->
 				<classpath/>
-				<argument>com.github.NervousOrange.springboot.Application</argument>
+				<argument>com.github.hoffmanzheng.springboot.Application</argument>
 			</arguments>
 		</configuration>
 	</execution>

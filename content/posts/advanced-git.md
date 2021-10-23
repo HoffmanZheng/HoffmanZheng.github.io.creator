@@ -7,7 +7,7 @@ date: 2020-12-28T13:19:47+01:00
 draft: false
 ---
 
-在 [Git 与 GitHub 使用指北](https://nervousorange.github.io/2019/git/) 中笔者已经介绍了 Git 及 GitHub 的基本操作，但对其原理不明所以，本篇将在之前的基础上结合 [Git Reference Manual](https://git-scm.com/docs) 介绍一些 Git 底层原理和高阶操作，以及在 GitHub 协作的流程。
+在 [Git 与 GitHub 使用指北](https://hoffmanzheng.github.io/2019/git/) 中笔者已经介绍了 Git 及 GitHub 的基本操作，但对其原理不明所以，本篇将在之前的基础上结合 [Git Reference Manual](https://git-scm.com/docs) 介绍一些 Git 底层原理和高阶操作，以及在 GitHub 协作的流程。
 
 # Git 进阶
 

@@ -15,7 +15,7 @@ Java 是个强类型的编程语言，一个变量的类型在编译时就已经
 
 如开篇所说，一个 Java 对象的类型在声明的时候就被确定了，但 Java 是面对对象的语言，有丰富的接口和抽象类，一个对象被传来传去的时候，可能就丢失了它的一些类型信息，但 Java 也像 C++ 那样是拥有 RTTI (Run-Time Type Identification) **运行时类型识别** 特性的语言。在任何时刻，任何一个对象都清楚地知道自己的具体类型（可以通过反射获取）。 
 
-不知道大家有没有想过，Java 中的对象是如何被创造出来的，创造时是否又遵循了一个怎样的规则。其实 Java 中的对象都是根据各自的说明书构建出来的，这个说明书信息就是在 [Javac 编译原理与 class 文件结构](https://nervousorange.github.io/2020/java-compile/) 中生成的类的 class 字节码文件之中，这些字节码文件又被存储在永久代 (Permenent Generation Java 7 之前) / 元空间 (MetaSpace Java 8 之后) 之中。
+不知道大家有没有想过，Java 中的对象是如何被创造出来的，创造时是否又遵循了一个怎样的规则。其实 Java 中的对象都是根据各自的说明书构建出来的，这个说明书信息就是在 [Javac 编译原理与 class 文件结构](https://hoffmanzheng.github.io/2020/java-compile/) 中生成的类的 class 字节码文件之中，这些字节码文件又被存储在永久代 (Permenent Generation Java 7 之前) / 元空间 (MetaSpace Java 8 之后) 之中。
 
 当需要创建一个对象时，就会将这个创建任务委托给类加载器来完成，类加载器会找到指定的 class 字节码文件，根据说明书来装配出一个需要的对象。因此任何一个 Java 对象，在运行时都清楚的知道自己是由哪个类的字节码装配出来的，都可以通过 `getClass() / instanceof` 来获取自己的具体类型。 
 

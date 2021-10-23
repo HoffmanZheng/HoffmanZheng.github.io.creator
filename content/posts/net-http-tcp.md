@@ -65,7 +65,7 @@ Connection：keep-alive
 
 ![](/images/请求头.png)
 
-当需要提交表单时，GET 方法会将请求参数放在 URL 中（见 [Web：浅析 URL](https://nervousorange.github.io/2020/web-url/)），POST 方法会将请求参数放在请求体之中。
+当需要提交表单时，GET 方法会将请求参数放在 URL 中（见 [Web：浅析 URL](https://hoffmanzheng.github.io/2020/web-url/)），POST 方法会将请求参数放在请求体之中。
 
 服务器返回的响应头为（返回的 HTML 文件会放在响应的实体体 entity body 中）：
 

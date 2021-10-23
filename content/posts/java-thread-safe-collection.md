@@ -7,7 +7,7 @@ date: 2020-01-16T13:19:47+01:00
 draft: false
 ---
 
-在我之前的博客 [Java：初识多线程、原理及实现](https://nervousorange.github.io/2020/java-multi-thread/) 提及，多线程下对数据的非原子性操作会造成数据错误，为此 JDK 也提供了一些线程安全的容器。本篇主要介绍 List 类的安全容器：Vector 和 CopyOnWriteArrayList，以及 Map 类的 HashTable 和 ConcurrentHashMap。从他们之前的区别，后者对前者的改进，具体的实现原理这几个角度进行分析。
+在我之前的博客 [Java：初识多线程、原理及实现](https://hoffmanzheng.github.io/2020/java-multi-thread/) 提及，多线程下对数据的非原子性操作会造成数据错误，为此 JDK 也提供了一些线程安全的容器。本篇主要介绍 List 类的安全容器：Vector 和 CopyOnWriteArrayList，以及 Map 类的 HashTable 和 ConcurrentHashMap。从他们之前的区别，后者对前者的改进，具体的实现原理这几个角度进行分析。
 
 # List 类的安全容器
 
