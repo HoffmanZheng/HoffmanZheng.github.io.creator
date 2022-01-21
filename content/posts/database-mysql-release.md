@@ -3,7 +3,7 @@ title: "Database：[译] MySQL 5.6 5.7 8.0 Release Notes"
 author: "Chenghao Zheng"
 tags: ["Database"]
 categories: ["Study notes"]
-date: 2021-12-19T13:19:47+01:00
+date: 2022-12-19T13:19:47+01:00
 draft: false
 ---
 

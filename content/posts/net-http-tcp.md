@@ -39,6 +39,11 @@ Web 的应用层协议是超文本传输协议 (HyperText Transfer Protocol , HT
 
 HTTP 定义了 Web 客户向 Web 服务器请求 Web 页面的方式，以及服务器向客户传送 Web 页面的方式。HTTP 使用 TCP 作为它的支撑运输协议，TCP 为 HTTP 提供可靠数据传输服务。
 
+HTTP 2 相对于 HTTP 1.1 的区别有：
+
+* 头信息压缩，有效地减少带宽
+* 推送功能，服务器端可以主动向客户端发起一些数据传输，可以并行推送资源文件，显著地提升了整体的传输效率和性能。
+
 #### 非持续连接和持续连接
 
 非持续性连接（non-persistent connection）是每个请求 / 响应对是经一个单独的 TCP 连接发送，而持续连接（persistent connection）是所有的请求及其响应经相同的 TCP 连接发送。HTTP 在其默认方式下使用持续连接，HTTP 客户和服务器也能配置成使用非持续连接 。  
@@ -65,7 +70,11 @@ Connection：keep-alive
 
 ![](/images/请求头.png)
 
-当需要提交表单时，GET 方法会将请求参数放在 URL 中（见 [Web：浅析 URL](https://hoffmanzheng.github.io/2020/web-url/)），POST 方法会将请求参数放在请求体之中。
+GET 和 POST 请求的主要区别如下：
+
+* GET 方法会将请求参数放在 URL 中（见 [Web：浅析 URL](https://hoffmanzheng.github.io/2020/web-url/)），POST 方法会将请求参数放在请求体之中，以表单形式传输。
+* GET 请求提交的数据最多只有 1024 bytes，而 POST 请求没有这个大小限制。
+* GET 请求会将敏感信息暴露在 URL 中，容易造成密码泄露。
 
 服务器返回的响应头为（返回的 HTML 文件会放在响应的实体体 entity body 中）：
 
