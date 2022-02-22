@@ -13,8 +13,6 @@ draft: false
 
 ### 概览
 
-
-
 ### 数据
 
 Couchbase 中的每个数据都是一个键值对型的 item，它拥有在 bucket 中唯一的键，它的值可以是任何形式的二进制或者 JSON (可以包含基本/复杂的数据类型)。
@@ -123,17 +121,8 @@ Couchbase 服务器完全集成了缓冲层，提供高速数据访问。需要�
 
 ![](/images/couchbase-createDocSequence3.png)
 
-
-
 #### 存储
-
-
 
 ### 服务与索引
 
-
-
 ### 集群与可用性
-
-
-
