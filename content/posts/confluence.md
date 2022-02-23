@@ -3,7 +3,7 @@ title: "多人协作平台 Confluence 搭建"
 author: "Chenghao Zheng"
 tags: ["tools"]
 categories: ["Study notes"]
-date: 2022-05-04T13:19:47+01:00
+date: 2023-05-04T13:19:47+01:00
 draft: false
 
 ---
