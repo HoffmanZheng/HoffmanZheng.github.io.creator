@@ -161,4 +161,50 @@ Couchbase 服务器提供了数据、查询、索引、搜索、分析、事件�
 
 ![](/images/couchbase-query_execution.png)
 
+有关索引对查询性能的优化可以参考另一篇博文：[Database：高性能 MySQL - 索引](https://hoffmanzheng.github.io/2020/database-index/)
+
 ### 集群与可用性
+
+Couchbase 集群包含一个或多个 Couchbase 服务器的实例，每个实例都运行在一个独立的节点上，数据和服务在集群中被共享。当一个 Couchbase 服务器被配置到一个节点上时，它可以被指定为一个新的集群或者作为一个已有集群的参与者。Couchbase 集群管理员运行在集群的每个节点上，并在节点间通信，保证所有节点的健康。
+
+数据会在不影响应用的情况下自动分散在集群中。每个 bucket 会被数据服务存储为 1024 个 vBuckets（虚拟 bucket），并平均分散在所有可用的数据服务节点。vBuckets 可以被跨集群间复制，并将其副本存于其他的节点。Couchbase 会在保证没有数据丢失的前提下自动处理节点的新增、删除和失效。在监测到配置变化时，vBuckets 和它的副本会在可用的节点上进行重新分配。跨数据中心复制 XDCR 可以将数据选择性地复制到一个远端节点，以此实现高可用性。
+
+#### 新增/移除节点
+
+添加节点时，会在持续处理现有的工作量的同时完成数据的重新分布 `redistribution`：
+
+1. 用现有的集群配置更新新的节点
+2. 初始化 rebalance，重新计算 vBucket 映射表
+3. 节点开始从现有节点接收每个 vBuckets 的复制流，生成新的 vBuckets 副本
+4. 随着 vBuckets 的数据被复制，索引也被更新，会发生从老的 vBucket 到新的 vBucket 的原子切换
+5. 新节点上的新 vBuckets 会被激活，新的 vBucket 映射表被交流给其他的节点。重复上述过程直到再平衡完成。
+
+移除一个数据服务节点的过程与新增的过程相似：在要维护的节点上创建 vBuckets，并将要移除的节点 vBucket 上的数据复制到那里。当节点上不再有 vBuckets 时，节点就会从集群中移除。当新增或移除一个没有数据服务的节点时，则无需移动数据。
+
+#### 节点失效
+
+在 Couchbase 服务集群中的节点会通过心跳机制提供它们的健康状态。所有实例都会定期提供心跳，其中包含了节点状态的基础统计信息。如果在一个默认时期内不再收到某个节点的心跳，集群会自动转移该故障节点。共有两种故障转移 `Failover` 的类型：
+
+* Graceful: 这是一个在线操作，要求零停机时间。当要移除的节点包含数据服务时，在剩下的集群节点上的副本 vBuckets 会被提升为激活状态，而要移除的节点上的活跃 vBuckets 会是 dead 状态。在整个过程中，数据服务节点会被主动、有序地移除，集群为每个 bucket 保持所有 1024 个活跃的 vBuckets。
+* Hard: 当节点失效时自动采取的故障转移过程，被动地从集群中移去节点，因为节点已经变得不可用或不稳定。当失去的节点曾运行数据服务，这个过程会从剩下的集群节点中将副本 vBuckets 提升激活，直到每个 bucket 有 1024 个活跃的 vBuckets。
+
+Hard Failover 应该只在某个节点变成不可用时被使用，当失效节点曾有数据服务时，集群会进入一个降级状态。部分副本 vBuckets 会被升级成活跃 vBuckets，集群则因减少的副本 vBuckets 缺少再一次对抗节点停电的资源。如果失效的节点运行着集群中唯一一个索引服务，索引会在强制故障转移期间变得不可用。ref: [Hard Failover Example](https://docs.couchbase.com/server/6.0/learn/clusters-and-availability/hard-failover.html#hard-failover-example)
+
+#### 集群内复制
+
+bucket 可以拥有至多三个副本，bucket 数据允许在副本中维护和更新。当节点故障时，就可以激活故障节点维护的数据副本。为了在节点故障时保证最大的数据可用性，集群会计算并在可用节点上实施最优的 vBuckets 分配，来减少在单个节点故障时的数据损失，如下图所示：
+
+![](/images/couchbase-vBucketReplication.png)
+
+#### 跨数据中心复制
+
+Cross Data Center Replication (XDCR) 能够在集群间复制数据，来避免数据中心故障，并提供分布全球的高性能数据访问。
+
+XDCR 支持跨集群单向 `Unidirectionally` 复制，在源 bucket 中存储的数据会被复制到指定的目标 bucket。尽管被复制的数据可以用来提供服务，但这事实上是设计用作容灾恢复的备份。
+
+![](/images/couchbase-unidirectional-xdcr.png)
+
+`Bidirectionally` 双向复制：源 bucket 中的数据可以被复制到目标 bucket，相反地，目标 bucket 中的数据也可以被复制回源 bucket。这让两个 buckets 都可以提供数据服务，在不同地区提供更快的数据访问。需要注意的是，XDCR 只提供了基础的单向复制机制，双向复制是通过实施两个相反的单向复制来实现的。
+
+![](/images/couchbase-bidirectional-xdcr.png)
+
