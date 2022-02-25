@@ -9,9 +9,7 @@ draft: false
 
 [Couchbase](https://www.couchbase.com/) 是为企业应用设计的现代分布式文档数据库，具有强大的搜索引擎和内置的操作和分析能力。它拥有 NoSQL 的强大功能，并提供快速、高效的数据双向同步。
 
-本篇根据 [Couchbase 官网文档](https://docs.couchbase.com/home/server.html) 介绍其数据模型、内存存储、各种服务、集群可用性等。
-
-### 概览
+本篇基于 [Couchbase 官网文档](https://docs.couchbase.com/home/server.html) 介绍其数据模型、内存存储、服务与搜索、集群可用性等。
 
 ### 数据
 
@@ -163,6 +161,37 @@ Couchbase 服务器提供了数据、查询、索引、搜索、分析、事件�
 
 有关索引对查询性能的优化可以参考另一篇博文：[Database：高性能 MySQL - 索引](https://hoffmanzheng.github.io/2020/database-index/)
 
+#### 全文搜索
+
+Couchbase 使用基于 [Bleve](http://blevesearch.com/) 的全文搜索，首先要在执行搜索的 bucket 上创建全文索引，默认的 `default` 的 Type Mappings 指可以对 bucket 内的所有文档进行搜索，如下图所示：
+
+![](/images/couchbase-defaultFullTextIndex.png)
+
+当然也可以只索引 bucket 中某个类型的文档，这样有助于减少空间和内存使用。例如指定文档 ID 下划线前的字符串为类型，hotel 为类型映射，然后将 default type mappings 取消即可，如下图所示：
+
+![](/images/couchbase-typeMapping.png)
+
+此外还可以仅索引文档中的某个字段，如下图所示：
+
+![](/images/couchbase-searchField.png)
+
+在网页管理员控制台测试搜索功能后，就可以用 REST API 来实现搜索：
+
+```js
+curl -u Administrator:password -X POST -H "Content-Type: application/json" \
+http://localhost:8094/api/index/travel-FTS/query \
+-d '{
+  "explain": true,
+  "fields": [
+    "*"
+  ],
+  "highlight": {},
+  "query": {
+    "query": "hotel"
+  }
+}'
+```
+
 ### 集群与可用性
 
 Couchbase 集群包含一个或多个 Couchbase 服务器的实例，每个实例都运行在一个独立的节点上，数据和服务在集群中被共享。当一个 Couchbase 服务器被配置到一个节点上时，它可以被指定为一个新的集群或者作为一个已有集群的参与者。Couchbase 集群管理员运行在集群的每个节点上，并在节点间通信，保证所有节点的健康。
@@ -207,4 +236,9 @@ XDCR 支持跨集群单向 `Unidirectionally` 复制，在源 bucket 中存储�
 `Bidirectionally` 双向复制：源 bucket 中的数据可以被复制到目标 bucket，相反地，目标 bucket 中的数据也可以被复制回源 bucket。这让两个 buckets 都可以提供数据服务，在不同地区提供更快的数据访问。需要注意的是，XDCR 只提供了基础的单向复制机制，双向复制是通过实施两个相反的单向复制来实现的。
 
 ![](/images/couchbase-bidirectional-xdcr.png)
+
+当双向复制的数据被不同地区的应用所修改时，可能会引起 **XDCR 冲突**，即文档数据在同一时刻或多或少被不同地修改了。XDCR 提供了基于序列号或时间戳的冲突解决方法：
+
+* 序列号是每个文档都会维护，并随着每一次文档更新而递增的。冲突时会比较源文档与目标文档的序列号，文档修订数较多的胜出。比如一个网站的点击计数，在冲突时，拥有更多计数的文档更能反应真实的计数值，在这种情况下就可以选择基于序列号的冲突解决。
+* 文档最后一次写入的时间戳也可以被用来在冲突时比较，拥有最近更新时间戳的文档胜出。如果新的值持续地被写入到同一个 key，且我们更关注 "当前值" 时，就应该使用基于时间戳的冲突解决，它保证了文档拥有最新的版本。
 
