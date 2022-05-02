@@ -8,8 +8,6 @@ draft: false
 
 ---
 
-
-
 Confluence 是一个专业的企业知识管理与协同软件，也可以用于构建企业 wiki。使用简单，但它强大的编辑和站点管理特征能够帮助团队成员之间共享信息、文档协作、集体讨论，信息推送。
 
 如果开发环境没有外网， 则可以考虑自行搭建 Confluence 作为产品文档、接口文档、升级日志的协作平台，提高开发协作的效率。本篇采用 Win 10 的 Linux 子系统演示搭建 Confluence 平台，Linux 子系统安装参考：[适用于 Linux 的 Windows 子系统安装指南 (Windows 10)](https://docs.microsoft.com/zh-cn/windows/wsl/install-win10#step-4---download-the-linux-kernel-update-package) 

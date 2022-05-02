@@ -3,7 +3,7 @@ title: "Ruby：JWT 的原理及实现"
 author: "Chenghao Zheng"
 tags: ["Ruby"]
 categories: ["Study notes"]
-date: 2022-10-23T03:19:47+01:00
+date: 2023-10-23T03:19:47+01:00
 draft: false
 ---
 

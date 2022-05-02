@@ -3,7 +3,7 @@ title: "深入理解 Apache Dubbo 与实战"
 author: "Chenghao Zheng"
 tags: ["microservice"]
 categories: ["Reading notes"]
-date: 2022-08-27T13:19:47+01:00
+date: 2023-08-27T13:19:47+01:00
 draft: true
 ---
 
