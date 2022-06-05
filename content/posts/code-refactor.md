@@ -7,13 +7,13 @@ date: 2022-05-02T03:19:47+01:00
 draft: false
 ---
 
-不知道大家有没有发现，编程活动的许多方面，都很难一次做对。可能是对代码的进一步理解，亦或是用户需求的又一次变化，当前的设计可能不再适应于需求。如果容许瑕疵存在，并进一步累积，代码就会变得越来越 **复杂**。在这之后对代码进行的理解、修改或调试，就会变得益发困难起来。
+不知道大家有没有发现，编程活动的许多方面，都很难一次做对。可能是对代码的进一步理解，亦或是用户需求的又一次变化，当前的设计可能不再适合于需求。如果容许瑕疵存在，并进一步累积，代码就会变得越来越 **复杂**。在这之后对代码进行的理解、修改或调试，就会变得益发困难起来。
 
 所谓重构，是在 **不改变** 代码外在行为的前提下，对程序内部结构的修改，对其设计的改进。虽然重构并不是一件做起来轻松的事，它却能使软件工程拥有更长的生命力。本篇结合 [《重构 (第 2 版)》](https://book.douban.com/subject/30468597/) 从一个开发者的角度讲讲重构，包括但不限于：察觉代码的坏味道、如何安全地重构以及几种重构的场景。本篇不会事无巨细地介绍所有的重构手法，而旨在指出一些值得参考的重构思想。
 
 ### 先聊聊测试
 
-重构并 **不总是安全** 的，正如代码的其他改动一样，重构也有可能引入新的 bug。如果当前的工程项目还没有自动测试覆盖，那笔者极力推荐在开始重构之前，先补全对于待重构代码的单元测试。
+重构并 **不总是安全** 的，正如代码的其他改动一样，重构也有可能引入新的 bug。如果当前的工程项目还没有覆盖自动测试，那笔者极力推荐在开始重构之前，先补全对于待重构代码的单元测试。
 
 在没有自动测试的情况下，开发者不得不频繁地在做出改动后手动调试测试程序的功能。这将花费很多时间和精力，并且也不够安全。编写 **自动测试**，可以让计算机来帮我们执行规律且重复的测试动作，测试代码片段对传入参数做出的响应是否符合预期或发生变化。在每一次完成代码重构后，都可以从容地运行测试，来帮助我们检查代码的行为是否受到了影响。
 
@@ -57,7 +57,7 @@ function printOwing(invoice) {
 }
 ```
 
-通过提炼代码，可以得到：
+通过提炼代码，可以得到以下代码，代码的可读性得到的显著提高：
 
 ```javascript
 function printOwing(invoice) {
@@ -95,17 +95,85 @@ function printDetails(invoice, outstanding) {
 
 #### 函数/变量改名
 
-命名可以说是编程中最难的事之一了，好的名字能让函数、模块、变量和类清晰地表名自己的功能和用法。很多开发者经常不愿意给程序元素改名，觉得不值得费这个劲，但好的名字能节省未来用来猜谜上的大把时间。如果想不到一个好名字，说明背后很可能潜藏着更深的设计问题。
+命名可以说是编程中最难的事之一了，好的名字能让函数、模块、变量和类清晰地表名自己的功能和用法。很多开发者经常不愿意给程序元素改名，觉得不值得费这个劲，但好的名字能节省未来用来 **猜谜** 上的大把时间。如果想不到一个好名字，说明背后很可能潜藏着更深的设计问题。
 
+比如有以下一段看起来不是很好理解的代码：
 
+```javascript
+function price(order) {
+  // price is base price - quantity discount + shipping
+  return order.quantity * order.itemPrice -
+    Math.max(0, order.quantity - 500) * order.itemPrice * 0.05 + 
+    Math.min(order.quantity * order.itemPrice * 0.1, 100);
+}
+```
 
-#### 引入参数对象
+对其使用提炼变量就能使代码更容易理解，同时注释也就不需要了：
 
+```javascript
+function price(order) {
+  const basePrice = order.quantity * order.itemPrice;
+  const quantityDiscount = Math.max(0, order.quantity - 500) * order.itemPrice *0.05;
+  const shipping = Math.min(basePrice * 0.1, 100);
+  return basePrice - quantityDiscount + shipping;
+}
+```
 
+在函数命名时也有个小窍门：先写一句注释描述这个函数的用途，再把这句注释变成函数的名字。
+
+#### 过长的参数列表
+
+有时候我们可以在代码中看到一些带着很多参数的函数，**过长的参数列表** 显然并不是一个好的工程实践，通常也会困惑代码的阅读者。如果一组数据项总是结伴同行，出没于一个又一个函数，我们可以将其组织成新的数据对象，这样既可以缩短函数的参数列表，也能使所有使用该数据对象的函数都使用同样的名字来访问其中的元素，提升代码的一致性。如果可以通过查询获取另一个参数的值，也可以使用以查询取代参数来减少参数的个数。
+
+有时我们会使用标志位 `flag` 来区分函数的行为，标记参数会影响函数内部的控制流，但它却通常无法清晰地传达自己的含义，对此可以使用移除标记参数。如果明确用一个函数来完成一项单独的任务，其含义就会清晰得多（见下述代码）。如果一个函数有多个标记参数，说明这个函数可能做得太多，应该考虑是否能用更简单的函数来组合出完整的逻辑。
+
+```javascript
+function deliveryDate(anOrder, isRush) {
+  let result;
+  let deliveryTime;
+  if (anOrder.deliveryState === "MA" || anOrder.deliveryState === "CT") {
+  	deliveryTime = isRush ? 1 : 2;
+  } else if (anOrder.deliveryState === "NY" || anOrder.deliveryState === "NH") {
+  	deliveryTime = 2;
+    if (anOrder.deliveryState === "NH" && !isRush) {
+    	deliveryTime = 3;
+    }
+  } else if (isRush) {
+  	deliveryTime = 3;
+  } else if (anOrder.deliveryState === "ME") {
+  	deliveryTime = 3;
+  } else {
+  	deliveryTime = 4;
+  }
+  result = anOrder.placedOn.plusDays(2 + deliveryTime);
+  if (isRush) result = result.minusDays(1);
+  return result;
+}
+
+// 针对 isRush 标志位，可以在 deliveryDate 上添加两个函数
+// 替换调用后，限制原函数的可见性，让人一见即知不应直接使用这个函数
+function rushDeliveryDate(anOrder) {
+	return deliveryDate(anOrder, true);
+}
+function regularDeliveryDate(anOrder) {
+	return deliveryDate(anOrder, false);
+}
+```
 
 ### 再谈封装
 
+上文有提到通过引入参数对象来减小函数的参数列表，而记录型结构有两种类型：一种需要声明合法的字段名，另一种可以随便用任何字段名。后者有哈希表、字典、数组等，使用这类结构时虽然方便但也有缺陷，那就是一条记录上 **持有什么字段** 往往不够直观。只能通过查看它的创建点和使用点来获取其维护的字段，如果这种记录只在程序的一个小范围里使用，那问题还不大，但如果其使用范围变宽，数据结构不直观就会造成更多的困扰。
+
+虽然封装是 OOP 三点特性之一，笔者在初写 Java 的时候也时常困惑：为什么要写一个又一个的数据类，又把其字段都用 private 封装起来，最后对外暴露 getter 函数。这看起来有些多此一举的行为却
+
 #### 找到所有调用
+
+在给函数重命名时，需要考虑是否能一步到位地修改其所有的调用者。如果函数还有外部的调用者（比如客户端，或者是来自其他服务的调用），可以采用 **渐进式** 地修改函数声明：
+
+1. 使用提炼函数将函数体提炼成一个新函数，给予新的命名
+2. 在旧函数中使用内联函数，调用新的函数
+3. 对外声明旧函数为废弃 `deprecated`，并告知应使用的新函数
+4. 在客户端完成调用修改后，将旧函数删除
 
 #### 重构对外接口
 
@@ -114,6 +182,4 @@ function printDetails(invoice, outstanding) {
 ### 优化条件逻辑
 
 ### 改善继承关系
-
-### 
 
