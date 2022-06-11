@@ -19,7 +19,7 @@ draft: false
 
 笔者曾就职于国内某民营企业，其部门的项目代码竟没有任何的测试代码，开发者只能在功能上线后再进行手动测试。就算这样，线上事故也频频发生，既存在新上线的功能无法达到预期的问题，也会有老的功能受到代码修改带来的影响。其实有很多的事故，在有了充足的自动测试后，都能被及早的发现，并且可以在很大程度上避免将这些问题暴露给我们的用户。
 
-### 代码可读性
+### 代码的可读性
 
 作为优秀的程序员，我们的目的从来不只是写出计算机可以理解的代码，而是写出人类容易理解的代码。大多数开发者都认为，代码被阅读和被修改的次数远远多于它被编写的次数，而保持代码易读、易修改是重构努力的方向之一。
 
@@ -123,7 +123,7 @@ function price(order) {
 
 #### 过长的参数列表
 
-有时候我们可以在代码中看到一些带着很多参数的函数，**过长的参数列表** 显然并不是一个好的工程实践，通常也会困惑代码的阅读者。如果一组数据项总是结伴同行，出没于一个又一个函数，我们可以将其组织成新的数据对象，这样既可以缩短函数的参数列表，也能使所有使用该数据对象的函数都使用同样的名字来访问其中的元素，提升代码的一致性。如果可以通过查询获取另一个参数的值，也可以使用以查询取代参数来减少参数的个数。
+有时候我们可以在代码中看到一些带着很多参数的函数，**过长的参数列表** 显然并不是一个好的工程实践，通常也会困扰代码的阅读者。如果一组数据项总是结伴同行，出没于一个又一个函数，我们可以将其组织成新的数据对象，这样既可以缩短函数的参数列表，也能使所有使用该数据对象的函数都使用同样的名字来访问其中的元素，提升代码的一致性。如果可以通过查询获取另一个参数的值，也可以使用以查询取代参数来减少参数的个数。
 
 有时我们会使用标志位 `flag` 来区分函数的行为，标记参数会影响函数内部的控制流，但它却通常无法清晰地传达自己的含义，对此可以使用移除标记参数。如果明确用一个函数来完成一项单独的任务，其含义就会清晰得多（见下述代码）。如果一个函数有多个标记参数，说明这个函数可能做得太多，应该考虑是否能用更简单的函数来组合出完整的逻辑。
 
@@ -160,26 +160,179 @@ function regularDeliveryDate(anOrder) {
 }
 ```
 
-### 再谈封装
+### 再谈谈封装
 
 上文有提到通过引入参数对象来减小函数的参数列表，而记录型结构有两种类型：一种需要声明合法的字段名，另一种可以随便用任何字段名。后者有哈希表、字典、数组等，使用这类结构时虽然方便但也有缺陷，那就是一条记录上 **持有什么字段** 往往不够直观。只能通过查看它的创建点和使用点来获取其维护的字段，如果这种记录只在程序的一个小范围里使用，那问题还不大，但如果其使用范围变宽，数据结构不直观就会造成更多的困扰。
 
-虽然封装是 OOP 三点特性之一，笔者在初写 Java 的时候也时常困惑：为什么要写一个又一个的数据类，又把其字段都用 private 封装起来，最后对外暴露 getter 函数。这看起来有些多此一举的行为却
+虽然封装是 OOP 三点特性之一，笔者在初写 Java 的时候也时常困惑：为什么要声明一个又一个的数据类，又把其字段都用 private 封装起来，最后对外暴露 `getter, setter` 函数。这看起来有些多此一举的行为却也蕴含着封装的思想。试想一下，当想要对结构体中某个字段进行改名的时候，我们往往需要找到并同步修改所有引用这个字段的地方，但如果不够仔细，或者存在外部引用就无法保证操作的安全性。不过，在将字段的访问封装起来后，我们就可以渐进地完成对字段的改名：
 
-#### 找到所有调用
+1. 声明一个新字段，以及它的 getter, setter 函数
+2. 将旧字段的 getter, setter 函数作为转发函数，调用新声明字段的函数
+3. 渐进式地修改所有调用老字段的地方，改为调用新字段的函数
+4. 在完成所有对老字段的引用的修改后，删除老的字段
 
-在给函数重命名时，需要考虑是否能一步到位地修改其所有的调用者。如果函数还有外部的调用者（比如客户端，或者是来自其他服务的调用），可以采用 **渐进式** 地修改函数声明：
+类似地，在给函数重命名时，需要考虑是否能一步到位地修改其所有的调用者。如果函数还有外部的调用者（比如客户端，或者是来自其他服务的调用），也可以采用 **渐进式** 地修改函数声明：
 
 1. 使用提炼函数将函数体提炼成一个新函数，给予新的命名
 2. 在旧函数中使用内联函数，调用新的函数
 3. 对外声明旧函数为废弃 `deprecated`，并告知应使用的新函数
 4. 在客户端完成调用修改后，将旧函数删除
 
-#### 重构对外接口
-
-
-
 ### 优化条件逻辑
+
+条件逻辑可以提升程序的威力，同时也会引入一定的复杂度。复杂的条件逻辑是编程中最难理解的东西之一，我们可以用以卫语句取代嵌套条件表达式来清晰表达 "在主要处理逻辑之前先做检查" 的意图，也可以用以多态取代条件表达式来处理 switch 的多种情况。
+
+条件表达式中，如果两个条件分支都属于正常行为，就应该使用形如 if...else... 的条件表达式，来表现出对两个分支同等的重视。但如果一个分支是正常行为，另一个分支是罕见或者异常的行为，就应该单独检查该条件，并在该条件为真时立刻从函数中返回，这样的单独检查常常被称为 "卫语句" `guard clauses`。卫语句可以告诉代码的阅读者，这种情况不是本函数的核心逻辑，如果它真发生了，请做一些必要的整理工作，然后退出。
+
+```javascript
+function payAmount(employee) {
+  let result;
+  if (employee.isSeparated) {
+  	result = {amount: 0, reasonCode: "SEP"};
+  }
+  else {
+    if (employee.isRetired) {
+    	result = {amount: 0, reasonCode: "RET"};
+    }
+    else {
+    	// logic to compute amount
+      lorem.ipsum(dolor.sitAmet);
+      consectetur(adipiscing).elit();
+      sed.do.eiusmod = tempor.incididunt.ut(labore) && dolore(magna.aliqua);
+      ut.enim.ad(minim.veniam);
+      result = someFinalComputation();
+    }
+  }
+  return result;
+}
+
+// 使用卫语句后，单独检查罕见条件，并处理提前返回
+function payAmount(employee) {
+  if (employee.isSeparated) return {amount: 0, reasonCode: "SEP"};
+  if (employee.isRetired) return {amount: 0, reasonCode: "RET"};
+  // logic to compute amount
+  lorem.ipsum(dolor.sitAmet);
+  consectetur(adipiscing).elit();
+  sed.do.eiusmod = tempor.incididunt.ut(labore) && dolore(magna.aliqua);
+  ut.enim.ad(minim.veniam);
+  return someFinalComputation();
+}
+```
+
+虽然使用条件逻辑本身的结构就足以表达不同的场景，但使用类和 **多态** 能把逻辑的拆分表述得更清晰。比如针对 switch 语句中的每种分支逻辑创建一个类，用多态来承载各个类型特有的行为，从而去除重复的分支逻辑。下面有这样一个例子，有一家评级机构，要根据航程本身的特征和船长过往的航行历史，对远洋航船的航行进行投资评级。
+
+```javascript
+function rating(voyage, history) {
+  const vpf = voyageProfitFactor(voyage, history);
+  const vr = voyageRisk(voyage);
+  const chr = captainHistoryRisk(voyage, history);
+  if (vpf * 3 > (vr + chr *2)) return "A";
+  else return "B";
+}
+function voyageRisk(voyage) {
+  let result = 1;
+  if (voyage.length > 4) result += 2;
+  if (voyage.length > 8) result += voyage.length -8;
+  if (["china", "east-indies"].includes(voyage.zone)) result += 4;
+  return Math.max(result, 0);
+}
+function captainHistoryRisk(voyage, history) {
+  let result = 1;
+  if (history.length < 5) result += 4;
+  result += history.filter(v => v.profit < 0).length;
+  if (voyage.zone === "china" && hasChina(history)) result -= 2;
+  return Math.max(result, 0);
+}
+function hasChina(history) {
+  return history.some(v => "china" === v.zone);
+}
+function voyageProfitFactor(voyage, history) {
+  let result = 2;
+  if (voyage.zone === "china") result += 1;
+  if (voyage.zone === "east-indies") result += 1;
+  if (voyage.zone === "china" && hasChina(history)) {
+    result += 3;
+    if (history.length > 10) result += 1;
+    if (voyage.length > 12) result += 1;
+    if (voyage.length > 18) result -= 1;
+  }
+  else {
+    if (history.length > 8) result += 1;
+    if (voyage.length > 14) result -= 1;
+  }
+  return result;
+}
+```
+
+代码中有两处同样的条件逻辑，都在询问 "是否有到中国的航程" 以及 "船长是否曾去过中国"，我们可以使用继承和多态将处理 "中国因素"（会混淆视听）的逻辑从基础逻辑中分离出来。在重构后可以得到一个基本的 Rating 类，其中放着基础逻辑，不考虑与 "中国经验" 相关的复杂性：
+
+```javascript
+class Rating {
+  constructor(voyage, history) {
+    this.voyage = voyage;
+    this.history = history;
+  }
+  get value() {
+    const vpf = this.voyageProfitFactor;
+    const vr = this.voyageRisk;
+    const chr = this.captainHistoryRisk;
+    if (vpf * 3 > (vr + chr *2)) return "A";
+    else return "B";
+  }
+  get voyageRisk() {
+    let result = 1;
+    if (voyage.length > 4) result += 2;
+    if (voyage.length > 8) result += voyage.length -8;
+    if (["china", "east-indies"].includes(voyage.zone)) result += 4;
+    return Math.max(result, 0);
+  }
+  function captainHistoryRisk(voyage, history) {
+    let result = 1;
+    if (history.length < 5) result += 4;
+    result += history.filter(v => v.profit < 0).length;
+    return Math.max(result, 0);
+  }
+  function voyageProfitFactor(voyage, history) {
+    let result = 2;
+    if (voyage.zone === "china") result += 1;
+    if (voyage.zone === "east-indies") result += 1;
+   	result += this.historyLengthFactor;
+    result += this.voyageLengthFactor;
+    return result;
+  }
+  get voyageLengthFactor() {
+    return (voyage.length > 14) ? -1 : 0;
+  }
+  get historyLengthFactor() {
+    reutrn (history.length > 8) ? 1 : 0;
+  }
+}
+```
+
+与 "中国经验" 相关的代码则清晰表述出在基本逻辑之上的一系列变体逻辑：
+
+```javascript
+class ExperienceChinaRating extends Rating {
+  get captainHistoryRisk() {
+    const result = super.captainHistoryRisk - 2;
+    return Math.max(result, 0);
+  }
+  get voyageLengthFactor() {
+    let result = 0;
+    if (this.voyage.length > 12) result += 1;
+    if (this.voyage.length > 18) result -= 1;
+    return result;
+  }
+  get historyLengthFactor() {
+  	return (this.history.length > 10) ? 1 : 0;
+  }
+  get voyageProfitFactor() {
+    return super.voyageProfitFactor + 3;
+  }
+}
+```
+
+
 
 ### 改善继承关系
 
