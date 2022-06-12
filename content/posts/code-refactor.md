@@ -332,7 +332,95 @@ class ExperienceChinaRating extends Rating {
 }
 ```
 
-
-
 ### 改善继承关系
+
+继承作为 OOP 里最为人熟知的特性十分实用，却也经常被误用，而且常得等到你用上一段时间，才能察觉到误用所在。超类中会处理所有的通用逻辑，如果某个函数/字段在各个子类中都相同，就可以通过函数/字段上移将它上升到超类中。同样地，如果超类中的某个函数/字段只与一个（或少数几个）子类有关，那么最好将其从超类中挪走，放到真正关心它的子类中去。
+
+如果一个字段仅仅作为 **类型码** 使用，根据其值来触发不同的行为，那么可以通过以子类取代类型码来重构，如此就可以用多态来处理条件逻辑。例如员工类已经有 "全职员工" 和 "兼职员工" 两个子类了，无法根据员工类别再创建不同的子类，就可以使用间接继承的方式：
+
+```javascript
+Class Employee {
+  constructor(name, type) {
+    this.validateType(type);
+    this._name = name;
+    this._type = type;
+  }
+  validateType(arg) {
+    if (!["engineer", "manager", "salesman"].includes(arg)) 
+      throw new Error(`Employee cannot be of type ${arg}`);
+  }
+  get type() {return this._type};
+  set type(arg) {this._type = arg};
+  get capitalizedType() {
+    return this._type.chatAt(0).toUpperCase() + this._type.substr(1).toLowerCase();
+  }
+  toString() {
+    return `${this._name} (${this.capitalizedType})`;
+  }
+}
+```
+
+我们可以用对象取代基本类型，使用类 EmployeeType 来取代 Employ 中的 type 属性。然后使用以子类取代类型码，把员工类别代码变成子类：
+
+```javascript
+class EmployeeType {
+  constructor(aString) {
+    this._value = aString;
+  }
+  toString() {return this._value;}
+}
+class Engineer extends EmployType {
+  toString() {return "emgineer";}
+}
+class Manager extends EmployType {
+  toString() {return "manager";}
+}
+class Salesman extends EmployeeType {
+  toString() {return "salesman";}
+}
+
+// 在原先的员工类中使用工厂方法
+class Employee {
+  ...
+  set type(arg) {this._type = Employee.createEmployeeType(arg);}
+    static createEmployeeType(aString) {
+      switch(aString) {
+        case "engineer": return new Engineer();
+        case "manager": return new Manager();
+        case "salesman": return new Salesman();
+        default: throw new Error(`Employee cannot be of type ${aString}`);
+      }
+    }
+  ...
+}
+```
+
+虽然继承在面向对象的语言中很容易实现，但继承也有短板。其一是继承这张牌只能打一次，只能用于处理超类在一个方向上的变化。其二是继承给类之间引入了非常紧密的关系，任何在超类上的修改，都可能破坏子类。这两个问题用 **委托** 都能解决，对于不同的变化原因，我们可以委托给不同的类。与继承相比，使用委托关系时接口更清晰、耦合更少。
+
+```javascript
+class Order {
+  get daysToShip() {
+    return this._warehouse.daysToShip;
+  }
+}
+class PriorityOrder extends Order {
+  get daysToShip() {
+    return this._priorityPlan.daysToShip;
+  }
+}
+
+// 使用委托后
+class Order {
+  get daysToShip() {
+    return (this.priorityDelegate) 
+      ? this._prorityDelegate.daysToShip
+      : this._warehouse.daysToShip;
+  }
+}
+class PriorityOrderDelegate {
+  get daysToShip() {
+    return this._priorityPlan.daysToShip;
+  }
+}
+```
 
