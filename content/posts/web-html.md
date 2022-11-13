@@ -1,7 +1,7 @@
 ---
 title: "Web：HTML 常用标签"
 author: "Chenghao Zheng"
-tags: ["Web"]
+tags: ["Net"]
 categories: ["Study notes"]
 date: 2020-02-08T13:19:47+01:00
 draft: false

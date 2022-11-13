@@ -1,7 +1,7 @@
 ---
 title: "Web：浅析 URL"
 author: "Chenghao Zheng"
-tags: ["Web"]
+tags: ["Net"]
 categories: ["Study notes"]
 date: 2020-02-09T09:19:47+01:00
 draft: false
