@@ -55,7 +55,7 @@ HTML 代码由许许多多不同的标签（tag）构成。下图为 HTML 的一
    5. id 名字不可与 windows 自带的全局属性重复。
 5. `<style>`  写在head里面，
    1. `[class=middle bordered]` 等号判断需要 class 名完全相等，不推荐使用
-   2.  `.middle` 可以匹配 class 名中用空格分配的一部分
+   2. `.middle` 可以匹配 class 名中用空格分配的一部分
    3. style 可以放 body 然后改 display: block; 显示出来 ---> 加 contenteditable，就可以让用户自己改自己的样式
    4. style 也可以直接写在章节标签后面 `style="border: 5px solid green;"`，这里的优先级比写在 head 中的要高 （JS 的优先级高于章节标签，JS 会覆盖它们其他两个）
 6. `tabindex`
@@ -87,7 +87,6 @@ HTML 代码由许许多多不同的标签（tag）构成。下图为 HTML 的一
 11. quote：内联的引用
 12. blockquote：块级的引用
 13. iframe：内嵌窗口（套娃），已经很少使用了，还有些老系统在用
-
 
 ```html
 前端的日常工作有：
@@ -132,14 +131,14 @@ a 标签的作用：
 1. href (hyper ref)  超链接
    1. `<a href="https://google.com">超链接</a>`
    2. 像用户一样打开网页：使用 `http-server -c-1`（不要缓存），在结尾加上路径
-   6. 方法二：yarn global add parcel  --> parcel a-href.html （直接接 html 文件名）
+   3. 方法二：yarn global add parcel  --> parcel a-href.html （直接接 html 文件名）
 2. 网址
    1. `//google.com`  无协议地址，它会继承当前的 http ---> 跳转到 google 真正的地址
    2. // 最高级，它会自动选择合适的 http / https，以后写网址都写这个
    3. 检查 - Network - Preserve.log 勾选 - 点击超链接 - 查看网页跳转记录
 3. 路径
    1. /a/b/c.html    http 的相对路径是相对于 http 服务的根目录
-   3. index.html  等价于 ./index.html 在当前目录下寻找
+   2. index.html  等价于 ./index.html 在当前目录下寻找
 4. 伪协议
    1. `<a href="javascript:alert(1);"` 点击这个标签就会执行 JS 代码 - 弹窗，显示 1 （早期的用法，现在不怎么用了）
    2. href="javascript:;"  链接点击之后，什么都不做
@@ -183,38 +182,41 @@ table 标签里面只能有三个标签 thead、tfoot、tbody  （相互顺序�
 
 ```html
 <style>
-	table {
-		width: 600px;
-		table-layout:auto;
-		border-spacing: 20px;
-		border-collapse: collapse;
-	}
-	td, 
-	th {
-		border: 1px solid blue;
-	}
+    table {
+        width: 600px;
+        table-layout:auto;
+        border-spacing: 20px;
+        border-collapse: collapse;
+    }
+    td, 
+    th {
+        border: 1px solid blue;
+    }
 </style>
 ```
 
 ### 3. img 标签
 
 1. 作用
-
+   
    1. 发出 get 请求，展示一张图片
-2. 属性
 
+2. 属性
+   
    1. alt / height / width / src
    2. src="dog.png" 
    3. alt 图片显示错误时代替的文字  alternative
    4. width="400" 只写宽度，高度会自适应
    5. 高度宽度都写，图片可能会变形，**永远不要让一张图片变形**
+
 3. 事件
-
+   
    1. onload / onerror 监听图片是否加载成功
-
+   
    2. 可以在图片加载失败的时候，进行一个挽救，显示一个 404 图片。
-4. 响应式
 
+4. 响应式
+   
    1. max-wirdth: 100%：为了能在手机上看
 
 ```html
@@ -274,4 +276,3 @@ table 标签里面只能有三个标签 thead、tfoot、tbody  （相互顺序�
    3. form 里要放一个 type=submit 才能触发 submit 事件
 
 ![](/images/表单标签.png)
-
