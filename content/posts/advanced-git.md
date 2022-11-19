@@ -133,7 +133,7 @@ Reset 会强行将当前分支 HEAD 指针移动到指定状态
 
 先使用 checkout 切换到需要重放的分支上，然后 `git cherry-pick <commmitId>` 重放某个提交的修改，如果需要 cherry-pick 多个提交可以使用 `<commitId>..<commitId>` 来代表一个提交的区间。
 
-#### revert 
+#### revert
 
 产生一个 **反向提交**，撤销某个提交。使用场景为撤销历史中的某个更改，如 BUG 或不恰当的功能；或是回滚某次发布。`git revert <commitId>` ，revert 一个 revert 可以恢复之前的那次 revert。
 
@@ -154,7 +154,7 @@ Reset 会强行将当前分支 HEAD 指针移动到指定状态
 
 Bisect 用于在提交历史中查找某处引入的 bug，在问题可以稳定重现的时候，可以迅速定位出问题的代码，有的时候这比直接去 debug 更快捷。
 
-1.  `git bisect start/reset`  
+1. `git bisect start/reset`  
 2. 切换提交历史后， `git bisect good/bad/skip`  
 3. `git bisect run ./run.sh`  使用脚本实现自动化 bisect
 
@@ -162,7 +162,7 @@ Bisect 用于在提交历史中查找某处引入的 bug，在问题可以稳定
 
 使用 git bisect 在 [Maven](https://github.com/apache/maven) 找出在 3.6.0 和 3.6.1 版本之间导致 [MNG-6700](https://issues.apache.org/jira/browse/MNG-6700) 的提交记录，可以使用 [MNG-6700 BUG Reproduction](https://github.com/hcsp/maven-issue-reproduction) 复现这个问题。
 
-~~~shell
+```shell
 /** clone maven 项目到本地，切换版本，然后打包，解压包后就可以找到 mvn */
 git clone https://github.com/apache/maven.git
 git checkout maven-3.6.0
@@ -208,11 +208,11 @@ $ gst
 HEAD detached at 2928dc6b6
 You are currently bisecting, started from branch 'd66c9c0b3'.
   (use "git bisect reset" to get back to the original branch)
-~~~
+```
 
 之后手动重复以上过程就可以找到导致这个问题的提交记录，但完全可以用脚本来 **自动化** 这个过程：
 
-~~~shell
+```shell
 #!/bin/sh
 
 VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout) 
@@ -220,11 +220,11 @@ rm -rf apache-maven-*
 mvn clean package -Dmaven.test.skip=true -Drat.skip=true
 unzip apache-maven/target/apache-maven-$VERSION-bin.zip -d .
 apache-maven-$VERSION/bin/mvn -f ../maven-issue-reproduction/pom.xml compile
-~~~
+```
 
 运行 `git bisect run ./run.sh` 后就可以等着最后的结果了：
 
-~~~shell
+```shell
 8b7055fe3ff3696b821409a6904ff4d69aa3ff6b is the first bad commit
 commit 8b7055fe3ff3696b821409a6904ff4d69aa3ff6b
 Author: Mickael Istria <mistria@redhat.com>
@@ -240,11 +240,13 @@ Date:   Thu Nov 29 22:21:29 2018 +0100
  .../maven/project/DefaultProjectBuilder.java       | 46 ++++++++++++++++------
  1 file changed, 33 insertions(+), 13 deletions(-)
 bisect run success
-~~~
+```
 
 # Github 协作详解
 
-GitHub 已经逐渐成为软件行业的一个事实标准，几乎所有的开源项目都可以在 GitHub 上找到代码，它已经不只是一个网站、一个平台了，可以说它已经是软件行业的图腾或者说是宗教了。
+GitHub 已经逐渐成为软件行业的一个事实标准，几乎所有的开源项目都可以在 GitHub 上找
+
+到代码，它已经不只是一个网站、一个平台了，可以说它已经是软件行业的图腾或者说是宗教了。
 
 ### GitHub 协作方式
 
@@ -252,12 +254,12 @@ GitHub 的出现，一改之前项目协作的困难，使得任何人发现了 
 
 ![](/images/github-fork-process.png)
 
-~~~shell
+```shell
 // fork 后的仓库并不会自动地随着上游仓库而更新，需要手动 sync a fork
 git remote add upstream https://github.com/apache/maven.git   // 添加上游仓库
 git fetch upstream  // 获取上游仓库的提交历史
 git merge upstream/master   // 获取更新
-~~~
+```
 
 ### GitHub 社区
 

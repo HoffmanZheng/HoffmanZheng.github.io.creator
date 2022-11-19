@@ -40,16 +40,16 @@ function printOwing(invoice) {
   console.log("***********************");
   console.log("**** Customer Owes ****");
   console.log("***********************");
-	
+
   // calculate outstanding
   for (const o of invoice.orders) {
-  	outstanding += o.amount;
+      outstanding += o.amount;
   }
-  
+
   // record due date
   const today = Clock.today;
   invoice.dueDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 30);
-  
+
   // print details
   console.log(`name: ${invoice.customer}`);
   console.log(`amount: ${outstanding}`);
@@ -132,18 +132,18 @@ function deliveryDate(anOrder, isRush) {
   let result;
   let deliveryTime;
   if (anOrder.deliveryState === "MA" || anOrder.deliveryState === "CT") {
-  	deliveryTime = isRush ? 1 : 2;
+      deliveryTime = isRush ? 1 : 2;
   } else if (anOrder.deliveryState === "NY" || anOrder.deliveryState === "NH") {
-  	deliveryTime = 2;
+      deliveryTime = 2;
     if (anOrder.deliveryState === "NH" && !isRush) {
-    	deliveryTime = 3;
+        deliveryTime = 3;
     }
   } else if (isRush) {
-  	deliveryTime = 3;
+      deliveryTime = 3;
   } else if (anOrder.deliveryState === "ME") {
-  	deliveryTime = 3;
+      deliveryTime = 3;
   } else {
-  	deliveryTime = 4;
+      deliveryTime = 4;
   }
   result = anOrder.placedOn.plusDays(2 + deliveryTime);
   if (isRush) result = result.minusDays(1);
@@ -153,10 +153,10 @@ function deliveryDate(anOrder, isRush) {
 // 针对 isRush 标志位，可以在 deliveryDate 上添加两个函数
 // 替换调用后，限制原函数的可见性，让人一见即知不应直接使用这个函数
 function rushDeliveryDate(anOrder) {
-	return deliveryDate(anOrder, true);
+    return deliveryDate(anOrder, true);
 }
 function regularDeliveryDate(anOrder) {
-	return deliveryDate(anOrder, false);
+    return deliveryDate(anOrder, false);
 }
 ```
 
@@ -188,14 +188,14 @@ function regularDeliveryDate(anOrder) {
 function payAmount(employee) {
   let result;
   if (employee.isSeparated) {
-  	result = {amount: 0, reasonCode: "SEP"};
+      result = {amount: 0, reasonCode: "SEP"};
   }
   else {
     if (employee.isRetired) {
-    	result = {amount: 0, reasonCode: "RET"};
+        result = {amount: 0, reasonCode: "RET"};
     }
     else {
-    	// logic to compute amount
+        // logic to compute amount
       lorem.ipsum(dolor.sitAmet);
       consectetur(adipiscing).elit();
       sed.do.eiusmod = tempor.incididunt.ut(labore) && dolore(magna.aliqua);
@@ -296,7 +296,7 @@ class Rating {
     let result = 2;
     if (voyage.zone === "china") result += 1;
     if (voyage.zone === "east-indies") result += 1;
-   	result += this.historyLengthFactor;
+       result += this.historyLengthFactor;
     result += this.voyageLengthFactor;
     return result;
   }
@@ -324,7 +324,7 @@ class ExperienceChinaRating extends Rating {
     return result;
   }
   get historyLengthFactor() {
-  	return (this.history.length > 10) ? 1 : 0;
+      return (this.history.length > 10) ? 1 : 0;
   }
   get voyageProfitFactor() {
     return super.voyageProfitFactor + 3;
@@ -423,4 +423,3 @@ class PriorityOrderDelegate {
   }
 }
 ```
-

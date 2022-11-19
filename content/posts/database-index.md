@@ -48,18 +48,18 @@ draft: false
 
 如果查询中的列不是独立的，MySQL 就不会使用索引。“独立的列” 指索引列不能是表达式的一部分，也不能是函数的参数。例如下面的查询，因为 `emp_no + 1` 表达式不是独立的列，使查询无法使用主键 `emp_no` 索引，只能使用效率低下的全表扫描。
 
-~~~mysq
+```mysq
 explain(select emp_no, birth_date, first_name, last_name, gender, hire_date
 FROM employees.employees where emp_no + 1 = 10003)
 
 id|select_type|table    |type|possible_keys|key|key_len|ref|rows  |Extra      |
 --|-----------|---------|----|-------------|---|-------|---|------|-----------|
  1|SIMPLE     |employees|ALL |             |   |       |   |300030|Using where|
-~~~
+```
 
 业务中我们常常对日期列做一些函数运算再比较，但这样就无法使对应的索引列生效，如下面的查询。我们应该养成简化 `where` 条件的习惯，始终 **将索引列单独放在比较符号的一侧**。
 
-~~~mysql
+```mysql
 explain(select emp_no, salary, from_date, to_date from salaries
 where emp_no = 10001 and TO_DAYS(CURRENT_DATE) - TO_DAYS(from_date) <= 365 * 20)
 
@@ -74,7 +74,7 @@ where emp_no = 10001 and from_date > '2000-01-01')
 id|select_type|table   |type |possible_keys|key    |key_len|ref|rows|Extra      |
 --|-----------|--------|-----|-------------|-------|-------|---|----|-----------|
  1|SIMPLE     |salaries|range|PRIMARY      |PRIMARY|7      |   |   3|Using where|
-~~~
+```
 
 ### 前缀索引和索引选择性
 
@@ -111,10 +111,10 @@ B-Tree 索引首先按照最左列排序，其次是第二列，等等。由于�
 
 聚簇索引是一种数据存储方式，或者说是索引组织表 index-organized table，其与非聚簇索引（如 MyISAM）在数据存储上的差异如下所示：
 
-| 索引       | 非叶子节点    | 叶子节点        |
-| ---------- | ------------- | --------------- |
-| 聚簇-主键  | 索引列 + 指针 | 行数据          |
-| 聚簇-二级  | 索引列 + 指针 | 索引列 + 主键值 |
+| 索引    | 非叶子节点    | 叶子节点      |
+| ----- | -------- | --------- |
+| 聚簇-主键 | 索引列 + 指针 | 行数据       |
+| 聚簇-二级 | 索引列 + 指针 | 索引列 + 主键值 |
 | 非聚簇索引 | 索引列 + 指针 | 数据所在行号    |
 
 ![](/images/cluster-index.jpg)
@@ -244,6 +244,7 @@ unique(id),
 index(id)
 ) engine = InnoDB;
 ```
+
 MySQL 的唯一限制和主键限制都是通过索引实现的，因此唯一索引、主键索引、二级索引其实是三个相同类型的索引，是重复索引。应该尽量避免创建重复索引，发现以后也应该立即移除。
 
 #### 冗余索引
@@ -334,7 +335,6 @@ and age between 18 and 25
 
 这样一个查询中就有了两个范围条件查询，没有一个直接的方法可以同时使用 last_online 和 age 两个索引列，只能将其中的一个范围查询转换为一个简单的等值比较，比如准备一个由定时任务维护的 active 列，将过去七天未曾登录的用户的值设置为 0。虽然 active 列并不是完全精确的，这类查询对精度的要求也没有那么高，如果需要精确数据，可以将 last_online 放到 where 子句，但不加入到索引中。
 
-
 ### 优化排序
 
 在使用 limit 偏移量实现翻页时，如果翻页翻到比较靠后时查询可能会比较慢，因为 MySQL 需要花费大量的时间来扫描需要丢弃的数据，对此可行的策略有：反范式化、预先计算、缓存或是限制用户能够翻页的数量。
@@ -360,4 +360,3 @@ id|select_type|table     |type  |possible_keys|key      |key_len|ref      |rows|
  1|PRIMARY    |t1        |eq_ref|PRIMARY      |PRIMARY  |4      |t2.emp_no|   1|           |
  2|DERIVED    |employees |index |             |hire_date|3      |         |1010|Using index|
 ```
-

@@ -127,15 +127,8 @@ $ rvm 2.6.3@alias1              // 切换使用的 gems 环境
 
 可以在文件资源管理器中看到，RVM 为 2.6.3 版本的 Ruby 又创建了一个单独的 gems 文件夹（如果根本没有使用 RVM 的 gemset，会从 default 目录获取 gems；一个具名的 gemset 将会从 global 中继承 gems，或者说 global 文件夹允许用户共享 gems）：
 
+
+
 ![](/images/ruby-namedGemsets.png)
 
 如果仍对 RVM 的工作流不熟悉，可以参考下官方给的 workflow：[Examples of using RVM](https://rvm.io/workflow/examples)
-
-
-
-
-
-
-
-
-

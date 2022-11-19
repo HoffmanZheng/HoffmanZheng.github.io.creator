@@ -62,7 +62,7 @@ Cache-Control 与 Expires 都属于强缓存，在缓存时间内不会向服务
 
 我们通常使用 URL 域名来请求网络资源，它需要被解析成 IP 地址才能与远程主机建立连接，如何将域名解析成 IP 地址就属于 DNS 解析的工作范畴了。
 
-> 对 URL 域名仍不了解的同学可以先阅读下：[Web：浅析 URL](https://hoffmanzheng.github.io/2020/web-url/)
+> 对 URL 域名仍不了解的同学可以先阅读下：[Web：浅析 URL](https://hoffmanzheng.github.io/2020/net-url/)
 
 #### 域名缓存
 
