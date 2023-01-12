@@ -88,6 +88,17 @@ SELECT firstjob[2] FROM HRData.History[0] AS firstjob
 }
 ```
 
+此外，N1QL 在实现多表关联时有不同的实现方式，它只支持 loopup doc 主键形式 left-to-right 关联，关联的左表需要能够生成右表文档的主键：
+
+```shell
+SELECT <select_list>
+FROM Table_A A
+LEFT JOIN Table_B B
+ON KEYS <keys-clause(A)>
+```
+
+参考：[Visually Explaining N1QL JOINs](https://dzone.com/articles/visually-explaining-n1ql-joins)
+
 ### Buckets, 内存与存储
 
 Couchbase 将数据保存在 Bucket 中，Couchbase buckets 在内存和硬盘中都有，而 Ephemeral bucket 作为暂时 bucket 只存在于内存中。bucket 可以设置以 **压缩** 形式存储数据来最大化资源效率，文档也可以（像 Redis 那样）设置一个过期时间。
