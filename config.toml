@@ -1,7 +1,7 @@
 baseURL = "https://hoffmanzheng.github.io/"
 languageCode = "en-us"
 title = "人间一场大梦"
-theme = "LeaveIt"
+theme = "Fixit"
 
 paginate = 12
 enableEmoji = true
@@ -39,9 +39,10 @@ preserveTaxonomyNames = true
     url = "/about/"
     weight = 4
 
+[params.auther] 
+  name = "Chenghao.Zheng"
 [params]
     since = 2019
-    author = "Chenghao.Zheng"                     # Author's name
     avatar = "/images/me/unnamed.jpg"           # Author's avatar
     subtitle = "做时间的朋友"         # Subtitle
     cdn_url = ""           # Base CDN URL
